@@ -1,0 +1,12 @@
+export const ROLES = {
+  PLATFORM_ADMIN: "platform_admin",
+  GOVERNMENT_ADMIN: "government_admin",
+  ORGANIZATION_ADMIN: "organization_admin",
+  INSTRUCTOR: "instructor",
+  STUDENT: "student"
+};
+
+export const PLATFORM_ROLES = [ROLES.PLATFORM_ADMIN, ROLES.GOVERNMENT_ADMIN];
+export const COURSE_EDITOR_ROLES = [...PLATFORM_ROLES, ROLES.INSTRUCTOR];
+export const ADMIN_ROLES = [...PLATFORM_ROLES, ROLES.ORGANIZATION_ADMIN];
+

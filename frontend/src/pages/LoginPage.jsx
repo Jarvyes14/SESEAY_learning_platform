@@ -1,0 +1,74 @@
+import { ArrowRight, LockKeyhole } from "lucide-react";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import Logo from "../components/Logo.jsx";
+import { useAuth } from "../context/AuthContext.jsx";
+
+function homeForRole(role) {
+  if (role === "student") return "/student";
+  if (role === "instructor") return "/instructor";
+  return "/admin";
+}
+
+export default function LoginPage() {
+  const { login } = useAuth();
+  const navigate = useNavigate();
+  const [email, setEmail] = useState("admin@example.gov");
+  const [password, setPassword] = useState("Admin123!");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setSubmitting(true);
+    setError("");
+    try {
+      const user = await login({ email, password });
+      navigate(homeForRole(user.role), { replace: true });
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="grid min-h-screen bg-surface lg:grid-cols-[1fr_1fr]">
+      <section className="flex flex-col p-8 lg:p-12">
+        <Logo />
+        <form className="mx-auto my-auto w-full max-w-md py-12" onSubmit={handleSubmit}>
+          <p className="eyebrow">Secure platform access</p>
+          <h1 className="mt-3 font-display text-4xl font-bold">Sign in</h1>
+          <p className="mt-3 text-text-secondary">
+            Accounts are created by authorized administrators. Public registration is disabled.
+          </p>
+          <label className="mt-8 block">
+            <span className="mb-2 block text-sm font-semibold">Email</span>
+            <input className="input-field" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
+          </label>
+          <label className="mt-5 block">
+            <span className="mb-2 block text-sm font-semibold">Password</span>
+            <input className="input-field" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+          </label>
+          {error && <p className="mt-4 rounded-md border border-error bg-error/10 p-3 text-sm text-error">{error}</p>}
+          <button type="submit" className="btn-primary mt-6 w-full" disabled={submitting}>
+            {submitting ? "Signing in..." : "Sign in"} <ArrowRight size={17} />
+          </button>
+          <div className="mt-6 rounded-md border border-border bg-background p-4 text-xs text-text-secondary">
+            Initial administrator: <strong>admin@example.gov</strong> / <strong>Admin123!</strong>
+          </div>
+        </form>
+      </section>
+      <aside className="hidden items-center bg-primary p-12 text-inverse lg:flex">
+        <div className="mx-auto max-w-xl">
+          <span className="grid size-14 place-items-center rounded-lg bg-inverse/10"><LockKeyhole size={28} /></span>
+          <h2 className="mt-7 font-display text-4xl font-bold">Functional learning management for public integrity.</h2>
+          <p className="mt-5 text-lg leading-8 text-inverse/75">
+            Build real courses, control sequential completion, review assignments, calculate grades, and issue verifiable certificates.
+          </p>
+        </div>
+      </aside>
+    </div>
+  );
+}
+

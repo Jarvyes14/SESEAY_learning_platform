@@ -1,0 +1,102 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:wght@600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root,
+[data-theme="government"] {
+  --color-primary: 31 78 121;
+  --color-secondary: 45 96 83;
+  --color-accent: 174 121 45;
+  --color-background: 244 246 248;
+  --color-surface: 255 255 255;
+  --color-surface-muted: 234 238 242;
+  --color-text-primary: 26 36 47;
+  --color-text-secondary: 88 101 113;
+  --color-success: 39 119 85;
+  --color-warning: 181 113 27;
+  --color-error: 171 55 57;
+  --color-border: 198 207 216;
+  --color-inverse: 255 255 255;
+  --color-overlay: 20 31 43;
+}
+
+[data-theme="corporate"] {
+  --color-primary: 43 54 116;
+  --color-secondary: 73 87 160;
+  --color-accent: 35 139 155;
+  --color-background: 246 247 251;
+  --color-surface: 255 255 255;
+  --color-surface-muted: 235 237 245;
+  --color-text-primary: 28 31 51;
+  --color-text-secondary: 91 96 121;
+  --color-success: 42 128 91;
+  --color-warning: 185 119 35;
+  --color-error: 177 57 68;
+  --color-border: 205 209 224;
+  --color-inverse: 255 255 255;
+  --color-overlay: 22 26 50;
+}
+
+[data-theme="dark"] {
+  --color-primary: 112 167 217;
+  --color-secondary: 105 175 152;
+  --color-accent: 220 168 85;
+  --color-background: 18 25 32;
+  --color-surface: 28 38 48;
+  --color-surface-muted: 39 51 62;
+  --color-text-primary: 239 243 247;
+  --color-text-secondary: 174 187 199;
+  --color-success: 92 183 139;
+  --color-warning: 225 166 84;
+  --color-error: 226 103 105;
+  --color-border: 65 80 94;
+  --color-inverse: 18 25 32;
+  --color-overlay: 0 0 0;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-text-primary antialiased;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    @apply focus:outline-none focus-visible:shadow-focus;
+  }
+}
+
+@layer components {
+  .container-page {
+    @apply mx-auto w-full max-w-7xl px-6 lg:px-10;
+  }
+
+  .panel {
+    @apply rounded-lg border border-border bg-surface shadow-panel;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-md bg-primary px-5 py-3 text-sm font-semibold text-inverse transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-primary bg-surface px-5 py-3 text-sm font-semibold text-primary transition hover:bg-primary/5;
+  }
+
+  .input-field {
+    @apply w-full rounded-md border border-border bg-surface px-4 py-3 text-sm text-text-primary placeholder:text-text-secondary focus:border-primary;
+  }
+
+  .eyebrow {
+    @apply text-xs font-bold uppercase tracking-widest text-primary;
+  }
+}
+

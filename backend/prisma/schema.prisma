@@ -1,0 +1,308 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CourseDifficulty {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum CourseStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ActivityType {
+  YOUTUBE_VIDEO
+  READING
+  QUESTIONS
+  INCORRECT_SECTION
+  ASSIGNMENT
+  FINAL_EXAM
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  COMPLETED
+  WITHDRAWN
+}
+
+enum ProgressStatus {
+  LOCKED
+  AVAILABLE
+  IN_PROGRESS
+  PENDING_REVIEW
+  COMPLETED
+}
+
+enum AttemptStatus {
+  SUBMITTED
+  PENDING_REVIEW
+  GRADED
+}
+
+model Role {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique
+  displayName String
+  users       User[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Organization {
+  id              String        @id @default(uuid()) @db.Uuid
+  name            String
+  institutionName String?
+  slug            String        @unique
+  users           User[]
+  courses         Course[]
+  enrollments     Enrollment[]
+  certificates    Certificate[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+model User {
+  id                String             @id @default(uuid()) @db.Uuid
+  email             String             @unique
+  passwordHash      String
+  firstName         String
+  lastName          String
+  isActive          Boolean            @default(true)
+  roleId            String             @db.Uuid
+  organizationId    String?            @db.Uuid
+  role              Role               @relation(fields: [roleId], references: [id])
+  organization      Organization?      @relation(fields: [organizationId], references: [id])
+  instructedCourses Course[]           @relation("CourseInstructor")
+  enrollments       Enrollment[]
+  activityProgress  ActivityProgress[]
+  activityAttempts  ActivityAttempt[]
+  reviewedAttempts  ActivityAttempt[]  @relation("AttemptReviewer")
+  grades            Grade[]            @relation("StudentGrades")
+  assignedGrades    Grade[]            @relation("GradeAssigner")
+  certificates      Certificate[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([roleId])
+  @@index([organizationId])
+}
+
+model Course {
+  id                 String           @id @default(uuid()) @db.Uuid
+  title              String
+  slug               String           @unique
+  description        String
+  category           String
+  difficulty         CourseDifficulty @default(BEGINNER)
+  durationMinutes    Int
+  passingGrade       Float            @default(70)
+  status             CourseStatus     @default(DRAFT)
+  certificateEnabled Boolean          @default(false)
+  instructorId       String?          @db.Uuid
+  organizationId     String?          @db.Uuid
+  instructor         User?            @relation("CourseInstructor", fields: [instructorId], references: [id])
+  organization       Organization?    @relation(fields: [organizationId], references: [id])
+  blocks             CourseBlock[]
+  enrollments        Enrollment[]
+  grades             Grade[]
+  certificates       Certificate[]
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@index([instructorId])
+  @@index([organizationId])
+  @@index([status])
+}
+
+model CourseBlock {
+  id          String   @id @default(uuid()) @db.Uuid
+  courseId    String   @db.Uuid
+  title       String
+  description String?
+  order       Int
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  topics      Topic[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([courseId, order])
+  @@index([courseId])
+}
+
+model Topic {
+  id          String      @id @default(uuid()) @db.Uuid
+  blockId     String      @db.Uuid
+  title       String
+  description String?
+  order       Int
+  block       CourseBlock @relation(fields: [blockId], references: [id], onDelete: Cascade)
+  activities  Activity[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@unique([blockId, order])
+  @@index([blockId])
+}
+
+model Activity {
+  id                  String             @id @default(uuid()) @db.Uuid
+  topicId             String             @db.Uuid
+  title               String
+  instructions        String?
+  type                ActivityType
+  order               Int
+  content             Json               @default("{}")
+  points              Float              @default(0)
+  minimumReadSeconds  Int                @default(0)
+  minimumWatchPercent Float              @default(80)
+  maxAttempts         Int?
+  topic               Topic              @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  progress            ActivityProgress[]
+  attempts            ActivityAttempt[]
+  grades              Grade[]
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  @@unique([topicId, order])
+  @@index([topicId])
+}
+
+model Enrollment {
+  id               String             @id @default(uuid()) @db.Uuid
+  studentId        String             @db.Uuid
+  courseId         String             @db.Uuid
+  organizationId   String?            @db.Uuid
+  status           EnrollmentStatus   @default(ACTIVE)
+  enrolledAt       DateTime           @default(now())
+  completedAt      DateTime?
+  student          User               @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  course           Course             @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  organization     Organization?      @relation(fields: [organizationId], references: [id])
+  activityProgress ActivityProgress[]
+  courseProgress   CourseProgress?
+  attempts         ActivityAttempt[]
+  grades           Grade[]
+  certificate      Certificate?
+  updatedAt        DateTime           @updatedAt
+
+  @@unique([studentId, courseId])
+  @@index([courseId])
+  @@index([organizationId])
+}
+
+model ActivityProgress {
+  id                   String         @id @default(uuid()) @db.Uuid
+  enrollmentId         String         @db.Uuid
+  studentId            String         @db.Uuid
+  activityId           String         @db.Uuid
+  status               ProgressStatus @default(LOCKED)
+  startedAt            DateTime?
+  completedAt          DateTime?
+  timeSpentSeconds     Int            @default(0)
+  watchedSeconds       Float          @default(0)
+  videoDurationSeconds Float?
+  confirmed            Boolean        @default(false)
+  enrollment           Enrollment     @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  student              User           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  activity             Activity       @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  @@unique([enrollmentId, activityId])
+  @@index([studentId])
+  @@index([activityId])
+}
+
+model CourseProgress {
+  id                String     @id @default(uuid()) @db.Uuid
+  enrollmentId      String     @unique @db.Uuid
+  completionPercent Float      @default(0)
+  finalGrade        Float?
+  passed            Boolean    @default(false)
+  completedAt       DateTime?
+  enrollment        Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+}
+
+model ActivityAttempt {
+  id            String        @id @default(uuid()) @db.Uuid
+  enrollmentId  String        @db.Uuid
+  activityId    String        @db.Uuid
+  studentId     String        @db.Uuid
+  attemptNumber Int
+  response      Json
+  score         Float?
+  maxScore      Float?
+  feedback      String?
+  status        AttemptStatus @default(SUBMITTED)
+  submittedAt   DateTime      @default(now())
+  gradedAt      DateTime?
+  reviewedById  String?       @db.Uuid
+  enrollment    Enrollment    @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  activity      Activity      @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  student       User          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  reviewedBy    User?         @relation("AttemptReviewer", fields: [reviewedById], references: [id])
+  grade         Grade?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@unique([enrollmentId, activityId, attemptNumber])
+  @@index([studentId])
+  @@index([status])
+}
+
+model Grade {
+  id           String           @id @default(uuid()) @db.Uuid
+  enrollmentId String           @db.Uuid
+  studentId    String           @db.Uuid
+  courseId     String           @db.Uuid
+  activityId   String?          @db.Uuid
+  attemptId    String?          @unique @db.Uuid
+  score        Float
+  maxScore     Float
+  percentage   Float
+  isFinal      Boolean          @default(false)
+  assignedById String?          @db.Uuid
+  enrollment   Enrollment       @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  student      User             @relation("StudentGrades", fields: [studentId], references: [id], onDelete: Cascade)
+  course       Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  activity     Activity?        @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  attempt      ActivityAttempt? @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  assignedBy   User?            @relation("GradeAssigner", fields: [assignedById], references: [id])
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([enrollmentId])
+  @@index([studentId])
+  @@index([courseId])
+}
+
+model Certificate {
+  id              String        @id @default(uuid()) @db.Uuid
+  enrollmentId    String        @unique @db.Uuid
+  studentId       String        @db.Uuid
+  courseId        String        @db.Uuid
+  organizationId  String?       @db.Uuid
+  certificateId   String        @unique
+  studentName     String
+  courseName      String
+  institutionName String
+  completionDate  DateTime
+  finalGrade      Float
+  issuedAt        DateTime      @default(now())
+  revokedAt       DateTime?
+  enrollment      Enrollment    @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  student         User          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  course          Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  organization    Organization? @relation(fields: [organizationId], references: [id])
+}
