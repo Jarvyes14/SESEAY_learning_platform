@@ -24,6 +24,8 @@ Services:
 - Backend health check: http://localhost:4000/health
 - pgAdmin: http://localhost:5050
 
+Local development uses the Vite dev server for the frontend.
+
 Initial platform account:
 
 - Email: `admin@example.gov`
@@ -47,6 +49,8 @@ Register the PostgreSQL server using:
 - Database: `integrity_learning`
 - Username: `integrity`
 - Password: `integrity_dev_password`
+
+In production, pgAdmin is optional and only starts when the `tools` profile is enabled.
 
 ## First-use workflow
 
@@ -138,6 +142,121 @@ npx prisma db seed
 
 The functional MVP migration intentionally removes the previous demonstration domain and data.
 Back up any database that contains information you need before applying it.
+
+## Production deployment with a domain
+
+Production uses:
+
+- Caddy as the public reverse proxy
+- Automatic HTTPS certificates from Let's Encrypt
+- Nginx serving the built React app
+- Express behind the internal Docker network
+- PostgreSQL on the internal Docker network
+
+Only ports `80` and `443` need to be publicly exposed.
+
+### 1. Point DNS to the server
+
+Create an `A` record for your domain:
+
+```text
+capacitacion.tudominio.gob.mx -> SERVER_PUBLIC_IP
+```
+
+Wait until DNS resolves to the server.
+
+### 2. Configure `.env`
+
+Copy the template:
+
+```bash
+cp .env.example .env
+```
+
+Set the production values:
+
+```env
+APP_DOMAIN=capacitacion.tudominio.gob.mx
+PUBLIC_APP_URL=https://capacitacion.tudominio.gob.mx
+PUBLIC_API_URL=/api
+ACME_EMAIL=admin@tudominio.gob.mx
+
+POSTGRES_USER=integrity
+POSTGRES_PASSWORD=use-a-strong-database-password
+POSTGRES_DB=integrity_learning
+
+JWT_SECRET=use-a-long-random-secret
+COOKIE_SECURE=true
+CLIENT_URL=https://capacitacion.tudominio.gob.mx
+```
+
+Generate a strong JWT secret:
+
+```bash
+openssl rand -base64 48
+```
+
+### 3. Start production
+
+```bash
+docker compose -f docker-compose.prod.yml up --build -d
+```
+
+Open:
+
+```text
+https://capacitacion.tudominio.gob.mx
+```
+
+The backend is available through the same domain:
+
+```text
+https://capacitacion.tudominio.gob.mx/api
+https://capacitacion.tudominio.gob.mx/health
+```
+
+### 4. Optional pgAdmin in production
+
+Start pgAdmin only when needed:
+
+```bash
+docker compose -f docker-compose.prod.yml --profile tools up -d pgadmin
+```
+
+Then open:
+
+```text
+http://SERVER_PUBLIC_IP:5050
+```
+
+For security, prefer keeping pgAdmin closed unless you are actively using it.
+
+### Production routing
+
+```text
+https://your-domain/
+  -> Caddy
+  -> frontend container, Nginx static React build
+
+https://your-domain/api/*
+  -> Caddy
+  -> backend container, Express API
+
+https://your-domain/health
+  -> Caddy
+  -> backend container health check
+```
+
+### Production security checklist
+
+- Use a real domain pointing to the server.
+- Open firewall ports `80` and `443`.
+- Use a strong `POSTGRES_PASSWORD`.
+- Use a strong `JWT_SECRET`.
+- Set `COOKIE_SECURE=true`.
+- Set `CLIENT_URL` and `PUBLIC_APP_URL` to the HTTPS domain.
+- Do not expose PostgreSQL publicly.
+- Do not leave pgAdmin running publicly unless protected by additional network controls.
 
 ## Disabled features
 
