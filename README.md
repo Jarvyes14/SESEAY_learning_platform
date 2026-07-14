@@ -1,276 +1,287 @@
-# Government Learning Platform MVP
+# Despliegue en Produccion
 
-Functional learning management MVP for government integrity, ethics, transparency, compliance,
-accountability, and anti-corruption training.
+Guia minima para desplegar la plataforma en una maquina virtual usando Docker, Docker Compose y un dominio comprado en GoDaddy.
 
-## Stack
+## Requisitos del servidor
 
-- React, React Router, Tailwind CSS, and Vite
-- Express REST API
-- PostgreSQL and Prisma ORM
-- JWT authentication stored in httpOnly cookies
-- Docker Compose with frontend, backend, PostgreSQL, and pgAdmin
+La maquina virtual debe tener:
 
-## Start the platform
+- Linux, recomendado Ubuntu Server 22.04 o 24.04
+- Docker instalado
+- Docker Compose instalado
+- Puertos abiertos: `80` y `443`
+- Dominio o subdominio apuntando a la IP publica del servidor
 
-```powershell
-Copy-Item .env.example .env
-docker compose up --build
-```
+Servicios incluidos:
 
-Services:
+- `proxy`: Caddy, expone la web con HTTPS
+- `frontend`: React compilado y servido con Nginx
+- `backend`: Express API
+- `postgres`: base de datos PostgreSQL
+- `pgadmin`: opcional, solo para administracion
 
-- Frontend: http://localhost:3000
-- Backend health check: http://localhost:4000/health
-- pgAdmin: http://localhost:5050
+## 1. Configurar DNS en GoDaddy
 
-Local development uses the Vite dev server for the frontend.
+En GoDaddy, entra a la administracion DNS del dominio y crea un registro tipo `A`.
 
-Initial platform account:
-
-- Email: `admin@example.gov`
-- Password: `Admin123!`
-- Role: `platform_admin`
-
-No organizations, courses, students, enrollments, grades, progress, or certificates are seeded.
-The seed is repeatable and does not delete data created after initial startup.
-
-## pgAdmin
-
-Sign in to pgAdmin with the values from `.env`:
-
-- Email: `admin@example.gov`
-- Password: `admin_dev_password`
-
-Register the PostgreSQL server using:
-
-- Host: `postgres`
-- Port: `5432`
-- Database: `integrity_learning`
-- Username: `integrity`
-- Password: `integrity_dev_password`
-
-In production, pgAdmin is optional and only starts when the `tools` profile is enabled.
-
-## First-use workflow
-
-1. Sign in as the platform administrator.
-2. Create an organization if institution-specific accounts or certificate names are needed.
-3. Create an instructor and a student from **Users**.
-4. Create a draft course from **Courses**.
-5. Build its hierarchy: course blocks, topics, and activities.
-6. Publish the course after at least one activity exists.
-7. Sign in as the student and enroll.
-8. Complete activities in sequence.
-9. Review assignment submissions from **Grades**.
-10. A certificate is generated only after full completion and a passing final grade.
-
-## Course model
+Ejemplo para dominio principal:
 
 ```text
-Course
-  CourseBlock
-    Topic
-      Activity
+Type: A
+Name: @
+Value: IP_PUBLICA_DE_LA_VM
+TTL: 600
 ```
 
-Supported activity types:
+Ejemplo para subdominio:
 
-- YouTube video
-- Reading content
-- Questions
-- Incorrect section identification
-- Assignment forms
-- Final exams
+```text
+Type: A
+Name: capacitacion
+Value: IP_PUBLICA_DE_LA_VM
+TTL: 600
+```
 
-## Anti-skip and grading rules
+Con el ejemplo anterior, la plataforma quedaria en:
 
-- Activity progress is initialized when a student enrolls.
-- Only the first activity is initially available.
-- Completing one activity unlocks the next activity across topic and block boundaries.
-- Reading completion requires server-measured minimum elapsed time and explicit confirmation.
-- Video completion requires server-checked elapsed time and the configured watch percentage.
-- Questions and exams require complete answers and are automatically graded.
-- Assignment forms enforce required fields and remain pending until instructor review.
-- Attempts are stored individually.
-- Final grade uses the best grade for each graded activity.
-- Topic and block percentages are calculated from their activity records.
-- Course percentage is calculated from all activity records.
-- Certificates require 100% completion, a passing final grade, and certificate enablement.
+```text
+https://capacitacion.tudominio.com
+```
 
-## Roles
+Espera a que el DNS propague antes de levantar la aplicacion.
 
-- `platform_admin`
-- `government_admin`
-- `organization_admin`
-- `instructor`
-- `student`
-
-Public registration is disabled. Administrators create user accounts.
-
-## API
-
-All routes are prefixed with `/api`.
-
-- `/auth`
-- `/users`
-- `/organizations`
-- `/courses`
-- `/blocks`
-- `/topics`
-- `/activities`
-- `/enrollments`
-- `/progress`
-- `/grades`
-- `/certificates`
-- `/reports`
-
-The API uses authentication middleware, role checks, Zod request validation, bcrypt password
-hashing, Helmet, credentialed CORS, and rate limiting on login.
-
-## Database and migrations
-
-Apply migrations and seed locally:
+Puedes verificarlo con:
 
 ```bash
-cd backend
-npm install
-npx prisma generate
-npx prisma migrate deploy
-npx prisma db seed
+nslookup capacitacion.tudominio.com
 ```
 
-The functional MVP migration intentionally removes the previous demonstration domain and data.
-Back up any database that contains information you need before applying it.
+Debe responder con la IP publica de la maquina virtual.
 
-## Production deployment with a domain
+## 2. Abrir puertos en la VM
 
-Production uses:
-
-- Caddy as the public reverse proxy
-- Automatic HTTPS certificates from Let's Encrypt
-- Nginx serving the built React app
-- Express behind the internal Docker network
-- PostgreSQL on the internal Docker network
-
-Only ports `80` and `443` need to be publicly exposed.
-
-### 1. Point DNS to the server
-
-Create an `A` record for your domain:
+En el firewall del proveedor de la VM abre:
 
 ```text
-capacitacion.tudominio.gob.mx -> SERVER_PUBLIC_IP
+80/tcp
+443/tcp
 ```
 
-Wait until DNS resolves to the server.
+Si usas `ufw` dentro del servidor:
 
-### 2. Configure `.env`
+```bash
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw allow OpenSSH
+sudo ufw enable
+```
 
-Copy the template:
+No expongas PostgreSQL publicamente.
+
+## 3. Crear archivo `.env`
+
+En el servidor, dentro de la carpeta del proyecto:
 
 ```bash
 cp .env.example .env
 ```
 
-Set the production values:
+Edita el archivo:
 
-```env
-APP_DOMAIN=capacitacion.tudominio.gob.mx
-PUBLIC_APP_URL=https://capacitacion.tudominio.gob.mx
-PUBLIC_API_URL=/api
-ACME_EMAIL=admin@tudominio.gob.mx
-
-POSTGRES_USER=integrity
-POSTGRES_PASSWORD=use-a-strong-database-password
-POSTGRES_DB=integrity_learning
-
-JWT_SECRET=use-a-long-random-secret
-COOKIE_SECURE=true
-CLIENT_URL=https://capacitacion.tudominio.gob.mx
+```bash
+nano .env
 ```
 
-Generate a strong JWT secret:
+Configura estos valores:
+
+```env
+APP_DOMAIN=capacitacion.tudominio.com
+PUBLIC_APP_URL=https://capacitacion.tudominio.com
+PUBLIC_API_URL=/api
+ACME_EMAIL=admin@tudominio.com
+
+POSTGRES_USER=integrity
+POSTGRES_PASSWORD=CAMBIA_ESTE_PASSWORD_POR_UNO_SEGURO
+POSTGRES_DB=integrity_learning
+
+JWT_SECRET=CAMBIA_ESTE_VALOR_POR_UN_SECRETO_LARGO
+JWT_EXPIRES_IN=7d
+COOKIE_NAME=integrity_token
+COOKIE_SECURE=true
+CLIENT_URL=https://capacitacion.tudominio.com
+
+PGADMIN_PORT=5050
+PGADMIN_DEFAULT_EMAIL=admin@tudominio.com
+PGADMIN_DEFAULT_PASSWORD=CAMBIA_ESTE_PASSWORD
+```
+
+Genera un `JWT_SECRET` seguro con:
 
 ```bash
 openssl rand -base64 48
 ```
 
-### 3. Start production
+Copia el resultado en:
+
+```env
+JWT_SECRET=RESULTADO_GENERADO
+```
+
+## 4. Levantar la aplicacion
+
+Usa el compose de produccion:
 
 ```bash
 docker compose -f docker-compose.prod.yml up --build -d
 ```
 
-Open:
+Verifica los contenedores:
 
-```text
-https://capacitacion.tudominio.gob.mx
+```bash
+docker compose -f docker-compose.prod.yml ps
 ```
 
-The backend is available through the same domain:
+Verifica logs:
 
-```text
-https://capacitacion.tudominio.gob.mx/api
-https://capacitacion.tudominio.gob.mx/health
+```bash
+docker compose -f docker-compose.prod.yml logs -f
 ```
 
-### 4. Optional pgAdmin in production
+## 5. Acceder a la plataforma
 
-Start pgAdmin only when needed:
+Abre:
+
+```text
+https://capacitacion.tudominio.com
+```
+
+El backend queda disponible en:
+
+```text
+https://capacitacion.tudominio.com/api
+https://capacitacion.tudominio.com/health
+```
+
+Cuenta inicial:
+
+```text
+Email: admin@example.gov
+Password: Admin123!
+Role: platform_admin
+```
+
+Despues de entrar, crea los usuarios reales desde la seccion `Users`.
+
+## 6. Certificado HTTPS
+
+Caddy genera automaticamente el certificado HTTPS usando Let's Encrypt.
+
+Para que funcione:
+
+- El dominio debe apuntar correctamente a la IP de la VM
+- Los puertos `80` y `443` deben estar abiertos
+- `APP_DOMAIN` debe coincidir exactamente con el dominio publico
+- `ACME_EMAIL` debe tener un correo valido
+
+Si el certificado no se genera, revisa logs:
+
+```bash
+docker compose -f docker-compose.prod.yml logs proxy
+```
+
+## 7. pgAdmin opcional
+
+pgAdmin no se levanta por defecto en produccion.
+
+Para activarlo temporalmente:
 
 ```bash
 docker compose -f docker-compose.prod.yml --profile tools up -d pgadmin
 ```
 
-Then open:
+Accede en:
 
 ```text
-http://SERVER_PUBLIC_IP:5050
+http://IP_PUBLICA_DE_LA_VM:5050
 ```
 
-For security, prefer keeping pgAdmin closed unless you are actively using it.
-
-### Production routing
+Credenciales:
 
 ```text
-https://your-domain/
-  -> Caddy
-  -> frontend container, Nginx static React build
-
-https://your-domain/api/*
-  -> Caddy
-  -> backend container, Express API
-
-https://your-domain/health
-  -> Caddy
-  -> backend container health check
+Email: valor de PGADMIN_DEFAULT_EMAIL
+Password: valor de PGADMIN_DEFAULT_PASSWORD
 ```
 
-### Production security checklist
+Para registrar PostgreSQL en pgAdmin:
 
-- Use a real domain pointing to the server.
-- Open firewall ports `80` and `443`.
-- Use a strong `POSTGRES_PASSWORD`.
-- Use a strong `JWT_SECRET`.
-- Set `COOKIE_SECURE=true`.
-- Set `CLIENT_URL` and `PUBLIC_APP_URL` to the HTTPS domain.
-- Do not expose PostgreSQL publicly.
-- Do not leave pgAdmin running publicly unless protected by additional network controls.
-
-## Disabled features
-
-Unimplemented operations remain visible but disabled in the interface, including bulk user import,
-content import, report export, course duplication, and bulk certificate downloads.
-
-## Stop services
-
-```bash
-docker compose down
+```text
+Host: postgres
+Port: 5432
+Database: integrity_learning
+Username: valor de POSTGRES_USER
+Password: valor de POSTGRES_PASSWORD
 ```
 
-To also delete PostgreSQL and pgAdmin volumes:
+Cuando termines, apaga pgAdmin:
 
 ```bash
-docker compose down -v
+docker compose -f docker-compose.prod.yml stop pgadmin
+```
+
+## 8. Actualizar la aplicacion
+
+Cuando subas nuevos cambios al servidor:
+
+```bash
+git pull
+docker compose -f docker-compose.prod.yml up --build -d
+```
+
+## 9. Apagar la aplicacion
+
+```bash
+docker compose -f docker-compose.prod.yml down
+```
+
+Esto no borra la base de datos porque PostgreSQL usa volumen persistente.
+
+Para borrar tambien los datos de PostgreSQL:
+
+```bash
+docker compose -f docker-compose.prod.yml down -v
+```
+
+Usa `down -v` solo si realmente quieres eliminar la base de datos.
+
+## 10. Respaldo basico de la base de datos
+
+Crear respaldo:
+
+```bash
+docker compose -f docker-compose.prod.yml exec postgres pg_dump -U integrity integrity_learning > backup.sql
+```
+
+Restaurar respaldo:
+
+```bash
+cat backup.sql | docker compose -f docker-compose.prod.yml exec -T postgres psql -U integrity integrity_learning
+```
+
+## Rutas internas de produccion
+
+```text
+https://capacitacion.tudominio.com
+  -> Caddy
+  -> frontend
+  -> Nginx
+  -> React build
+
+https://capacitacion.tudominio.com/api/*
+  -> Caddy
+  -> backend
+  -> Express
+
+https://capacitacion.tudominio.com/health
+  -> Caddy
+  -> backend health check
 ```
