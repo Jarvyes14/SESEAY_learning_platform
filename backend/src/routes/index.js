@@ -9,6 +9,7 @@ import gradesRouter from "./grades.routes.js";
 import organizationsRouter from "./organizations.routes.js";
 import progressRouter from "./progress.routes.js";
 import reportsRouter from "./reports.routes.js";
+import settingsRouter from "./settings.routes.js";
 import topicsRouter from "./topics.routes.js";
 import usersRouter from "./users.routes.js";
 
@@ -26,5 +27,6 @@ router.use("/progress", progressRouter);
 router.use("/grades", gradesRouter);
 router.use("/certificates", certificatesRouter);
 router.use("/reports", reportsRouter);
+router.use("/settings", settingsRouter);
 
 export default router;

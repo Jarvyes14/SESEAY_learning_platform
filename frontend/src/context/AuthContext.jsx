@@ -39,6 +39,14 @@ export function AuthProvider({ children }) {
         const result = await api("/auth/me");
         setUser(result.user);
         return result.user;
+      },
+      async changePassword(credentials) {
+        const result = await api("/auth/change-password", {
+          method: "POST",
+          body: JSON.stringify(credentials)
+        });
+        setUser(result.user);
+        return result.user;
       }
     }),
     [loading, user]

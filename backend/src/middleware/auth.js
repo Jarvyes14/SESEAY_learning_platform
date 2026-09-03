@@ -36,6 +36,16 @@ export async function requireAuth(req, _res, next) {
     req.user = session.user;
     req.authSession = session;
 
+    const requestPath = req.originalUrl.split("?")[0];
+    const allowedDuringPasswordChange = new Set([
+      "/api/auth/me",
+      "/api/auth/change-password",
+      "/api/auth/logout"
+    ]);
+    if (session.user.mustChangePassword && !allowedDuringPasswordChange.has(requestPath)) {
+      throw new HttpError(403, "Password change required before accessing the platform");
+    }
+
     if (session.lastSeenAt.getTime() < Date.now() - 5 * 60 * 1000) {
       await prisma.session.updateMany({
         where: { id: session.id, revokedAt: null },

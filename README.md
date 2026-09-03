@@ -113,6 +113,13 @@ CLIENT_URL=https://capacitacion.tudominio.com
 INITIAL_ADMIN_EMAIL=admin@tudominio.com
 INITIAL_ADMIN_PASSWORD=CAMBIA_ESTA_CONTRASENA_INICIAL
 
+SMTP_HOST=smtp.tudominio.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=notificaciones@tudominio.com
+SMTP_PASSWORD=CAMBIA_ESTA_CONTRASENA_SMTP
+SMTP_FROM=notificaciones@tudominio.com
+
 PGADMIN_PORT=5050
 PGADMIN_DEFAULT_EMAIL=admin@tudominio.com
 PGADMIN_DEFAULT_PASSWORD=CAMBIA_ESTE_PASSWORD
@@ -189,6 +196,10 @@ Role: platform_admin
 ```
 
 El `seed` nunca reemplaza la contrasena ni los datos de un administrador existente. Despues de entrar, puedes crear y editar usuarios reales desde la seccion `Users`, incluyendo su correo, rol, organizacion, estado y contrasena temporal.
+
+Las invitaciones y la recuperacion de contrasenas requieren las variables `SMTP_*`. El nombre de la plataforma, correo de soporte, limite de sesiones, duracion de enlaces y politica de contrasenas se administran visualmente desde `Settings`. Los secretos SMTP permanecen exclusivamente en `.env`.
+
+En desarrollo, Docker Compose incluye Mailpit como buzon SMTP local en `http://localhost:8025`. Los correos de invitacion y recuperacion aparecen ahi. En produccion debes reemplazar `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` y `SMTP_FROM` con los datos de tu proveedor de correo.
 
 Cada inicio de sesion se registra por dispositivo. Los usuarios pueden revisar y revocar sus accesos desde `Sesiones`; al superar `MAX_ACTIVE_SESSIONS`, se cierra automaticamente la sesion activa mas antigua. Desactivar una cuenta o cambiar su contrasena tambien revoca sus sesiones abiertas.
 

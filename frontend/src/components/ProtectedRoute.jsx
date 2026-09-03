@@ -11,6 +11,9 @@ export default function ProtectedRoute({ roles }) {
   if (!user) {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
+  if (user.mustChangePassword && location.pathname !== "/change-password") {
+    return <Navigate to="/change-password" replace />;
+  }
   if (roles && !roles.includes(user.role)) {
     const home = user.role === "student" ? "/student" : user.role === "instructor" ? "/instructor" : "/admin";
     return <Navigate to={home} replace />;

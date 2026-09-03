@@ -1,6 +1,6 @@
 import { ArrowRight, LockKeyhole } from "lucide-react";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import Logo from "../components/Logo.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 
@@ -13,6 +13,7 @@ function homeForRole(role) {
 export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -42,6 +43,7 @@ export default function LoginPage() {
           <p className="mt-3 text-text-secondary">
             Accounts are created by authorized administrators. Public registration is disabled.
           </p>
+          {location.state?.passwordReset && <p className="mt-5 rounded-md border border-success bg-success/10 p-3 text-sm text-success">Your password was updated. You can now sign in.</p>}
           <label className="mt-8 block">
             <span className="mb-2 block text-sm font-semibold">Email</span>
             <input className="input-field" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
@@ -50,6 +52,7 @@ export default function LoginPage() {
             <span className="mb-2 block text-sm font-semibold">Password</span>
             <input className="input-field" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
           </label>
+          <div className="mt-3 text-right"><Link className="text-sm font-semibold text-primary" to="/forgot-password">Forgot your password?</Link></div>
           {error && <p className="mt-4 rounded-md border border-error bg-error/10 p-3 text-sm text-error">{error}</p>}
           <button type="submit" className="btn-primary mt-6 w-full" disabled={submitting}>
             {submitting ? "Signing in..." : "Sign in"} <ArrowRight size={17} />

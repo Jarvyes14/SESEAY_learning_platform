@@ -1,5 +1,5 @@
 import bcrypt from "bcrypt";
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import { z } from "zod";
@@ -18,6 +18,8 @@ import { getAuthToken, requireAuth } from "../middleware/auth.js";
 import { validate } from "../middleware/validate.js";
 import { publicSession, publicUser } from "../utils/serializers.js";
 import { idParamSchema } from "../validation/common.js";
+import { sendPasswordResetEmail } from "../services/email.service.js";
+import { assertPasswordPolicy, getPlatformSettings } from "../services/platform-settings.service.js";
 
 const router = Router();
 const limiter = rateLimit({
@@ -26,6 +28,13 @@ const limiter = rateLimit({
   standardHeaders: "draft-7",
   legacyHeaders: false,
   message: { error: "Too many login attempts. Try again later." }
+});
+const recoveryLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { error: "Too many recovery attempts. Try again later." }
 });
 
 router.post(
@@ -51,6 +60,7 @@ router.post(
     const token = signAccessToken(user, sessionId);
     const expiresAt = accessTokenExpiresAt(token);
     const now = new Date();
+    const settings = await getPlatformSettings();
 
     await prisma.$transaction(async (transaction) => {
       await transaction.session.create({
@@ -70,7 +80,7 @@ router.post(
           expiresAt: { gt: now }
         },
         orderBy: { createdAt: "desc" },
-        skip: env.MAX_ACTIVE_SESSIONS,
+        skip: settings.maxActiveSessions,
         select: { id: true }
       });
 
@@ -85,6 +95,117 @@ router.post(
     res
       .cookie(env.COOKIE_NAME, token, authCookieOptionsUntil(expiresAt))
       .json({ user: publicUser(user) });
+  })
+);
+
+router.post(
+  "/forgot-password",
+  recoveryLimiter,
+  validate(
+    z.object({
+      email: z.string().trim().email().transform((value) => value.toLowerCase())
+    })
+  ),
+  asyncHandler(async (req, res) => {
+    const user = await prisma.user.findUnique({ where: { email: req.body.email } });
+    if (user?.isActive) {
+      const settings = await getPlatformSettings();
+      const token = randomBytes(32).toString("hex");
+      const tokenHash = createHash("sha256").update(token).digest("hex");
+      const expiresAt = new Date(Date.now() + settings.passwordResetExpiryMinutes * 60 * 1000);
+
+      await prisma.$transaction([
+        prisma.passwordToken.updateMany({
+          where: { userId: user.id, purpose: "PASSWORD_RESET", usedAt: null },
+          data: { usedAt: new Date() }
+        }),
+        prisma.passwordToken.create({
+          data: { userId: user.id, tokenHash, purpose: "PASSWORD_RESET", expiresAt }
+        })
+      ]);
+
+      try {
+        await sendPasswordResetEmail({ user, token, settings });
+      } catch (error) {
+        console.error("Password recovery email delivery failed", error.message);
+      }
+    }
+
+    res.status(202).json({
+      message: "If an active account exists for that email, a recovery link has been sent."
+    });
+  })
+);
+
+router.post(
+  "/reset-password",
+  recoveryLimiter,
+  validate(z.object({ token: z.string().min(64).max(128), password: z.string().min(1).max(72) })),
+  asyncHandler(async (req, res) => {
+    const tokenHash = createHash("sha256").update(req.body.token).digest("hex");
+    const passwordToken = await prisma.passwordToken.findFirst({
+      where: {
+        tokenHash,
+        purpose: "PASSWORD_RESET",
+        usedAt: null,
+        expiresAt: { gt: new Date() }
+      },
+      include: { user: true }
+    });
+    if (!passwordToken || !passwordToken.user.isActive) {
+      throw new HttpError(400, "Recovery link is invalid or has expired");
+    }
+
+    const settings = await getPlatformSettings();
+    assertPasswordPolicy(req.body.password, settings);
+    const now = new Date();
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: passwordToken.userId },
+        data: { passwordHash: await bcrypt.hash(req.body.password, 12), mustChangePassword: false }
+      }),
+      prisma.passwordToken.update({ where: { id: passwordToken.id }, data: { usedAt: now } }),
+      prisma.session.updateMany({
+        where: { userId: passwordToken.userId, revokedAt: null },
+        data: { revokedAt: now }
+      })
+    ]);
+
+    res.clearCookie(env.COOKIE_NAME, authCookieOptions).json({ message: "Password updated" });
+  })
+);
+
+router.post(
+  "/change-password",
+  requireAuth,
+  validate(z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(1).max(72) })),
+  asyncHandler(async (req, res) => {
+    if (!(await bcrypt.compare(req.body.currentPassword, req.user.passwordHash))) {
+      throw new HttpError(400, "Current password is incorrect");
+    }
+    const settings = await getPlatformSettings();
+    assertPasswordPolicy(req.body.newPassword, settings);
+    if (await bcrypt.compare(req.body.newPassword, req.user.passwordHash)) {
+      throw new HttpError(400, "New password must be different from the current password");
+    }
+
+    const now = new Date();
+    const user = await prisma.$transaction(async (transaction) => {
+      const updated = await transaction.user.update({
+        where: { id: req.user.id },
+        data: {
+          passwordHash: await bcrypt.hash(req.body.newPassword, 12),
+          mustChangePassword: false
+        },
+        include: { role: true, organization: true }
+      });
+      await transaction.session.updateMany({
+        where: { userId: req.user.id, id: { not: req.authSession.id }, revokedAt: null },
+        data: { revokedAt: now }
+      });
+      return updated;
+    });
+    res.json({ user: publicUser(user) });
   })
 );
 

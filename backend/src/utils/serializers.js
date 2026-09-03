@@ -5,6 +5,7 @@ export function publicUser(user) {
     firstName: user.firstName,
     lastName: user.lastName,
     isActive: user.isActive,
+    mustChangePassword: user.mustChangePassword,
     role: user.role?.name,
     organization: user.organization
       ? {

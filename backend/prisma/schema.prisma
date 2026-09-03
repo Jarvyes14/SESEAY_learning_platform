@@ -48,6 +48,10 @@ enum AttemptStatus {
   GRADED
 }
 
+enum PasswordTokenPurpose {
+  PASSWORD_RESET
+}
+
 model Role {
   id          String   @id @default(uuid()) @db.Uuid
   name        String   @unique
@@ -71,30 +75,62 @@ model Organization {
 }
 
 model User {
-  id                String             @id @default(uuid()) @db.Uuid
-  email             String             @unique
-  passwordHash      String
-  firstName         String
-  lastName          String
-  isActive          Boolean            @default(true)
-  roleId            String             @db.Uuid
-  organizationId    String?            @db.Uuid
-  role              Role               @relation(fields: [roleId], references: [id])
-  organization      Organization?      @relation(fields: [organizationId], references: [id])
-  instructedCourses Course[]           @relation("CourseInstructor")
-  enrollments       Enrollment[]
-  activityProgress  ActivityProgress[]
-  activityAttempts  ActivityAttempt[]
-  reviewedAttempts  ActivityAttempt[]  @relation("AttemptReviewer")
-  grades            Grade[]            @relation("StudentGrades")
-  assignedGrades    Grade[]            @relation("GradeAssigner")
-  certificates      Certificate[]
-  sessions          Session[]
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  id                 String             @id @default(uuid()) @db.Uuid
+  email              String             @unique
+  passwordHash       String
+  firstName          String
+  lastName           String
+  isActive           Boolean            @default(true)
+  mustChangePassword Boolean            @default(false)
+  roleId             String             @db.Uuid
+  organizationId     String?            @db.Uuid
+  role               Role               @relation(fields: [roleId], references: [id])
+  organization       Organization?      @relation(fields: [organizationId], references: [id])
+  instructedCourses  Course[]           @relation("CourseInstructor")
+  enrollments        Enrollment[]
+  activityProgress   ActivityProgress[]
+  activityAttempts   ActivityAttempt[]
+  reviewedAttempts   ActivityAttempt[]  @relation("AttemptReviewer")
+  grades             Grade[]            @relation("StudentGrades")
+  assignedGrades     Grade[]            @relation("GradeAssigner")
+  certificates       Certificate[]
+  sessions           Session[]
+  passwordTokens     PasswordToken[]
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
 
   @@index([roleId])
   @@index([organizationId])
+}
+
+model PasswordToken {
+  id        String               @id @default(uuid()) @db.Uuid
+  userId    String               @db.Uuid
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String               @unique
+  purpose   PasswordTokenPurpose
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime             @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model PlatformSettings {
+  id                         String   @id @default("global")
+  platformName               String   @default("Integrity Learning")
+  platformSubtitle           String   @default("Public Service Academy")
+  supportEmail               String?
+  maxActiveSessions          Int      @default(5)
+  passwordMinLength          Int      @default(12)
+  passwordRequireUppercase   Boolean  @default(true)
+  passwordRequireLowercase   Boolean  @default(true)
+  passwordRequireNumber      Boolean  @default(true)
+  passwordRequireSpecial     Boolean  @default(true)
+  passwordResetExpiryMinutes Int      @default(60)
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
 }
 
 model Session {

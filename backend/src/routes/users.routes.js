@@ -10,6 +10,12 @@ import { allowRoles } from "../middleware/roles.js";
 import { validate } from "../middleware/validate.js";
 import { publicUser } from "../utils/serializers.js";
 import { idParamSchema, paginationSchema } from "../validation/common.js";
+import { sendInvitationEmail } from "../services/email.service.js";
+import {
+  assertPasswordPolicy,
+  generateTemporaryPassword,
+  getPlatformSettings
+} from "../services/platform-settings.service.js";
 
 const router = Router();
 const roleNames = Object.values(ROLES);
@@ -104,7 +110,6 @@ router.post(
   validate(
     z.object({
       email: z.string().trim().email().transform((value) => value.toLowerCase()),
-      password: z.string().min(8).max(72),
       firstName: z.string().trim().min(2).max(80),
       lastName: z.string().trim().min(2).max(80),
       role: z.enum(roleNames),
@@ -144,10 +149,13 @@ router.post(
       throw new HttpError(400, "The selected organization does not exist");
     }
 
+    const settings = await getPlatformSettings();
+    const temporaryPassword = generateTemporaryPassword(settings);
     const user = await prisma.user.create({
       data: {
         email: req.body.email,
-        passwordHash: await bcrypt.hash(req.body.password, 12),
+        passwordHash: await bcrypt.hash(temporaryPassword, 12),
+        mustChangePassword: true,
         firstName: req.body.firstName,
         lastName: req.body.lastName,
         roleId: role.id,
@@ -155,7 +163,65 @@ router.post(
       },
       include: { role: true, organization: true }
     });
-    res.status(201).json({ data: publicUser(user) });
+    let invitation;
+    try {
+      invitation = await sendInvitationEmail({ user, temporaryPassword, settings });
+    } catch (error) {
+      console.error("Invitation email delivery failed", error.message);
+      invitation = { sent: false, reason: "Email delivery failed" };
+    }
+    res.status(201).json({ data: publicUser(user), invitation });
+  })
+);
+
+router.post(
+  "/:id/invite",
+  allowRoles(...ADMIN_ROLES),
+  validate(idParamSchema, "params"),
+  asyncHandler(async (req, res) => {
+    const target = await prisma.user.findUnique({
+      where: { id: req.params.id },
+      include: { role: true, organization: true }
+    });
+    if (!target) throw new HttpError(404, "User not found");
+    if (target.id === req.user.id) throw new HttpError(400, "You cannot reinvite your own account");
+    if (req.user.role.name !== ROLES.PLATFORM_ADMIN && target.role.name === ROLES.PLATFORM_ADMIN) {
+      throw new HttpError(403, "Only a platform administrator can manage this account");
+    }
+    if (
+      req.user.role.name === ROLES.ORGANIZATION_ADMIN &&
+      (target.organizationId !== req.user.organizationId ||
+        !manageableRolesFor(req.user).includes(target.role.name))
+    ) {
+      throw new HttpError(403, "You cannot manage this account");
+    }
+
+    const settings = await getPlatformSettings();
+    const temporaryPassword = generateTemporaryPassword(settings);
+    const now = new Date();
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: target.id },
+        data: {
+          passwordHash: await bcrypt.hash(temporaryPassword, 12),
+          mustChangePassword: true,
+          isActive: true
+        }
+      }),
+      prisma.session.updateMany({
+        where: { userId: target.id, revokedAt: null },
+        data: { revokedAt: now }
+      })
+    ]);
+
+    let invitation;
+    try {
+      invitation = await sendInvitationEmail({ user: target, temporaryPassword, settings });
+    } catch (error) {
+      console.error("Invitation email delivery failed", error.message);
+      invitation = { sent: false, reason: "Email delivery failed" };
+    }
+    res.json({ invitation });
   })
 );
 
@@ -250,9 +316,9 @@ router.patch(
       if (!organization) throw new HttpError(400, "The selected organization does not exist");
     }
 
-    const passwordHash = req.body.password
-      ? await bcrypt.hash(req.body.password, 12)
-      : undefined;
+    const settings = req.body.password ? await getPlatformSettings() : null;
+    if (req.body.password) assertPasswordPolicy(req.body.password, settings);
+    const passwordHash = req.body.password ? await bcrypt.hash(req.body.password, 12) : undefined;
     const permissionsChanged =
       (req.body.role !== undefined && req.body.role !== target.role.name) ||
       (req.body.organizationId !== undefined &&
@@ -271,7 +337,8 @@ router.patch(
           isActive: req.body.isActive,
           organizationId: req.body.organizationId,
           roleId: role?.id,
-          passwordHash
+          passwordHash,
+          mustChangePassword: passwordHash ? true : undefined
         },
         include: { role: true, organization: true }
       });

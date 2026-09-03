@@ -1,4 +1,4 @@
-import { Building2, Pencil, Plus, Power, Trash2, UserPlus, X } from "lucide-react";
+import { Building2, MailPlus, Pencil, Plus, Power, Trash2, UserPlus, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import DisabledButton from "../components/DisabledButton.jsx";
 import EmptyState from "../components/EmptyState.jsx";
@@ -11,7 +11,6 @@ const initialUser = {
   firstName: "",
   lastName: "",
   email: "",
-  password: "",
   role: "student",
   organizationId: ""
 };
@@ -21,7 +20,6 @@ function userToForm(user) {
     firstName: user.firstName,
     lastName: user.lastName,
     email: user.email,
-    password: "",
     role: user.role,
     organizationId: user.organization?.id ?? "",
     isActive: user.isActive
@@ -72,14 +70,16 @@ export default function UsersPage() {
     setMessage("");
     setSubmitting("user");
     try {
-      await api("/users", {
+      const result = await api("/users", {
         method: "POST",
         body: JSON.stringify({
           ...form,
           organizationId: form.organizationId || null
         })
       });
-      setMessage("User created successfully.");
+      setMessage(result.invitation?.sent
+        ? "User created and invitation email sent."
+        : `User created, but the invitation was not sent: ${result.invitation?.reason ?? "email is not configured"}.`);
       setForm(initialUser);
       setShowUserForm(false);
       await load();
@@ -129,6 +129,24 @@ export default function UsersPage() {
     }
   }
 
+  async function inviteUser(target) {
+    if (!window.confirm(`Generate a new temporary password and send an invitation to ${target.email}?`)) return;
+    setError("");
+    setMessage("");
+    setSubmitting(target.id);
+    try {
+      const result = await api(`/users/${target.id}/invite`, { method: "POST" });
+      setMessage(result.invitation?.sent
+        ? `A new invitation was sent to ${target.email}.`
+        : `The temporary credential was generated, but the email was not sent: ${result.invitation?.reason ?? "email is not configured"}.`);
+      await load();
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setSubmitting("");
+    }
+  }
+
   function beginEdit(target) {
     setEditingUser(target);
     setEditForm(userToForm(target));
@@ -156,8 +174,6 @@ export default function UsersPage() {
         organizationId: editForm.organizationId || null,
         isActive: editForm.isActive
       };
-      if (editForm.password) payload.password = editForm.password;
-
       await api(`/users/${editingUser.id}`, {
         method: "PATCH",
         body: JSON.stringify(payload)
@@ -227,7 +243,6 @@ export default function UsersPage() {
           <FormField label="First name" value={form.firstName} onChange={(value) => setForm({ ...form, firstName: value })} />
           <FormField label="Last name" value={form.lastName} onChange={(value) => setForm({ ...form, lastName: value })} />
           <FormField label="Email" type="email" value={form.email} onChange={(value) => setForm({ ...form, email: value })} />
-          <FormField label="Temporary password" type="password" minLength={8} maxLength={72} autoComplete="new-password" value={form.password} onChange={(value) => setForm({ ...form, password: value })} />
           <label>
             <span className="mb-2 block text-sm font-semibold">Role</span>
             <select className="input-field" value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}>
@@ -253,7 +268,7 @@ export default function UsersPage() {
               </select>
             </label>
           )}
-          <p className="text-xs text-text-secondary md:col-span-2">Passwords must contain between 8 and 72 characters. Share temporary credentials through a secure channel.</p>
+          <p className="text-xs text-text-secondary md:col-span-2">A secure temporary password will be generated automatically and sent to the user's email. They must replace it on first sign-in.</p>
           <button className="btn-primary md:col-span-2" type="submit" disabled={submitting !== "" || !roles.length}>
             <UserPlus size={16} /> {submitting === "user" ? "Creating…" : "Create user"}
           </button>
@@ -274,16 +289,6 @@ export default function UsersPage() {
           <FormField label="First name" value={editForm.firstName} onChange={(value) => setEditForm({ ...editForm, firstName: value })} />
           <FormField label="Last name" value={editForm.lastName} onChange={(value) => setEditForm({ ...editForm, lastName: value })} />
           <FormField label="Email" type="email" value={editForm.email} onChange={(value) => setEditForm({ ...editForm, email: value })} />
-          <FormField
-            label="New password (optional)"
-            type="password"
-            minLength={8}
-            maxLength={72}
-            autoComplete="new-password"
-            required={false}
-            value={editForm.password}
-            onChange={(value) => setEditForm({ ...editForm, password: value })}
-          />
           <label>
             <span className="mb-2 block text-sm font-semibold">Role</span>
             <select
@@ -381,6 +386,17 @@ export default function UsersPage() {
                         >
                           <Pencil size={16} />
                         </button>
+                        {currentUser.id !== target.id && (
+                          <button
+                            type="button"
+                            className="rounded-md border border-border p-2 text-text-secondary hover:text-primary disabled:opacity-60"
+                            onClick={() => inviteUser(target)}
+                            title="Generate temporary password and send invitation"
+                            disabled={submitting !== ""}
+                          >
+                            <MailPlus size={16} />
+                          </button>
+                        )}
                         {currentUser.id !== target.id && (
                           <button
                             type="button"

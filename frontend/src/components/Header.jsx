@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   LogOut,
   MonitorSmartphone,
+  Settings,
   ShieldCheck,
   Users
 } from "lucide-react";
@@ -19,7 +20,8 @@ const linksByRole = {
     ["Users", "/admin/users", Users],
     ["Courses", "/instructor", BookOpen],
     ["Grades", "/grades", GraduationCap],
-    ["Certificates", "/certificates", Award]
+    ["Certificates", "/certificates", Award],
+    ["Settings", "/admin/settings", Settings]
   ],
   government_admin: [
     ["Overview", "/admin", LayoutDashboard],
