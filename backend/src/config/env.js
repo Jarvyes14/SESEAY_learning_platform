@@ -7,6 +7,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   JWT_SECRET: z.string().min(32),
   JWT_EXPIRES_IN: z.string().default("7d"),
+  MAX_ACTIVE_SESSIONS: z.coerce.number().int().min(1).max(50).default(5),
   COOKIE_NAME: z.string().default("integrity_token"),
   COOKIE_SECURE: z
     .string()
@@ -23,4 +24,3 @@ if (!parsed.success) {
 }
 
 export const env = parsed.data;
-

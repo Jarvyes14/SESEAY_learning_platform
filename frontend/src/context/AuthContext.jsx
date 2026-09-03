@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { api } from "../lib/api.js";
+import { api, AUTH_UNAUTHORIZED_EVENT } from "../lib/api.js";
 
 const AuthContext = createContext(null);
 
@@ -8,10 +8,15 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const handleUnauthorized = () => setUser(null);
+    window.addEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
+
     api("/auth/me")
       .then((result) => setUser(result.user))
       .catch(() => setUser(null))
       .finally(() => setLoading(false));
+
+    return () => window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
   }, []);
 
   const value = useMemo(

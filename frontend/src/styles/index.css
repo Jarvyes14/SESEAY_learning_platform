@@ -88,7 +88,7 @@
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-md border border-primary bg-surface px-5 py-3 text-sm font-semibold text-primary transition hover:bg-primary/5;
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-primary bg-surface px-5 py-3 text-sm font-semibold text-primary transition hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-60;
   }
 
   .input-field {
@@ -99,4 +99,3 @@
     @apply text-xs font-bold uppercase tracking-widest text-primary;
   }
 }
-

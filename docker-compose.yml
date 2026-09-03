@@ -26,6 +26,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-integrity}:${POSTGRES_PASSWORD:-integrity_dev_password}@postgres:5432/${POSTGRES_DB:-integrity_learning}?schema=public
       JWT_SECRET: ${JWT_SECRET:-development-only-secret-change-before-production-1234}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      MAX_ACTIVE_SESSIONS: ${MAX_ACTIVE_SESSIONS:-5}
       COOKIE_NAME: ${COOKIE_NAME:-integrity_token}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       CLIENT_URL: ${CLIENT_URL:-http://localhost:3000}

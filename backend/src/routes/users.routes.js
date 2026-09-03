@@ -14,13 +14,32 @@ import { idParamSchema, paginationSchema } from "../validation/common.js";
 const router = Router();
 const roleNames = Object.values(ROLES);
 
+function manageableRolesFor(user) {
+  if (user.role.name === ROLES.PLATFORM_ADMIN) return roleNames;
+  if (user.role.name === ROLES.GOVERNMENT_ADMIN) {
+    return roleNames.filter((role) => role !== ROLES.PLATFORM_ADMIN);
+  }
+  return [ROLES.INSTRUCTOR, ROLES.STUDENT];
+}
+
 router.use(requireAuth);
+router.use((req, _res, next) => {
+  if (req.user.role.name === ROLES.ORGANIZATION_ADMIN && !req.user.organizationId) {
+    return next(new HttpError(403, "Your account is not assigned to an organization"));
+  }
+  next();
+});
 
 router.get(
   "/roles",
   allowRoles(...ADMIN_ROLES),
-  asyncHandler(async (_req, res) => {
-    res.json({ data: await prisma.role.findMany({ orderBy: { displayName: "asc" } }) });
+  asyncHandler(async (req, res) => {
+    res.json({
+      data: await prisma.role.findMany({
+        where: { name: { in: manageableRolesFor(req.user) } },
+        orderBy: { displayName: "asc" }
+      })
+    });
   })
 );
 
@@ -84,7 +103,7 @@ router.post(
   allowRoles(...ADMIN_ROLES),
   validate(
     z.object({
-      email: z.string().email().transform((value) => value.toLowerCase()),
+      email: z.string().trim().email().transform((value) => value.toLowerCase()),
       password: z.string().min(8).max(72),
       firstName: z.string().trim().min(2).max(80),
       lastName: z.string().trim().min(2).max(80),
@@ -93,20 +112,38 @@ router.post(
     })
   ),
   asyncHandler(async (req, res) => {
-    if (
-      req.user.role.name !== ROLES.PLATFORM_ADMIN &&
-      req.body.role === ROLES.PLATFORM_ADMIN
-    ) {
-      throw new HttpError(403, "Only a platform administrator can create this role");
+    if (!manageableRolesFor(req.user).includes(req.body.role)) {
+      throw new HttpError(403, "You cannot create a user with this role");
     }
+
     if (req.user.role.name === ROLES.ORGANIZATION_ADMIN) {
-      if (![ROLES.STUDENT, ROLES.INSTRUCTOR].includes(req.body.role)) {
-        throw new HttpError(403, "Organization administrators can create students and instructors");
+      if (!req.user.organizationId) {
+        throw new HttpError(403, "Your account is not assigned to an organization");
       }
       req.body.organizationId = req.user.organizationId;
     }
 
-    const role = await prisma.role.findUnique({ where: { name: req.body.role } });
+    if (req.body.role === ROLES.ORGANIZATION_ADMIN && !req.body.organizationId) {
+      throw new HttpError(400, "Organization administrators must belong to an organization");
+    }
+
+    const [role, existingUser, organization] = await Promise.all([
+      prisma.role.findUnique({ where: { name: req.body.role } }),
+      prisma.user.findUnique({ where: { email: req.body.email }, select: { id: true } }),
+      req.body.organizationId
+        ? prisma.organization.findUnique({
+            where: { id: req.body.organizationId },
+            select: { id: true }
+          })
+        : null
+    ]);
+
+    if (!role) throw new HttpError(500, "The selected role is not configured");
+    if (existingUser) throw new HttpError(409, "An account with this email already exists");
+    if (req.body.organizationId && !organization) {
+      throw new HttpError(400, "The selected organization does not exist");
+    }
+
     const user = await prisma.user.create({
       data: {
         email: req.body.email,
@@ -148,20 +185,89 @@ router.patch(
     ) {
       throw new HttpError(403, "User is outside your organization");
     }
+
+    if (
+      req.user.role.name !== ROLES.PLATFORM_ADMIN &&
+      target.role.name === ROLES.PLATFORM_ADMIN
+    ) {
+      throw new HttpError(403, "Only a platform administrator can manage this account");
+    }
+    if (
+      req.user.role.name === ROLES.ORGANIZATION_ADMIN &&
+      target.id !== req.user.id &&
+      !manageableRolesFor(req.user).includes(target.role.name)
+    ) {
+      throw new HttpError(403, "You cannot manage a user with this role");
+    }
+    if (target.id === req.user.id) {
+      if (req.body.isActive === false) {
+        throw new HttpError(400, "You cannot deactivate your own account");
+      }
+      if (req.body.role && req.body.role !== target.role.name) {
+        throw new HttpError(400, "You cannot change your own role");
+      }
+      if (
+        req.body.organizationId !== undefined &&
+        req.body.organizationId !== target.organizationId
+      ) {
+        throw new HttpError(400, "You cannot change your own organization");
+      }
+    }
+    if (req.body.role && !manageableRolesFor(req.user).includes(req.body.role)) {
+      throw new HttpError(403, "You cannot assign this role");
+    }
+    if (req.user.role.name === ROLES.ORGANIZATION_ADMIN) {
+      req.body.organizationId = req.user.organizationId;
+    }
+
     const role = req.body.role
       ? await prisma.role.findUnique({ where: { name: req.body.role } })
       : null;
-    const user = await prisma.user.update({
-      where: { id: req.params.id },
-      data: {
-        firstName: req.body.firstName,
-        lastName: req.body.lastName,
-        isActive: req.body.isActive,
-        organizationId: req.body.organizationId,
-        roleId: role?.id,
-        passwordHash: req.body.password ? await bcrypt.hash(req.body.password, 12) : undefined
-      },
-      include: { role: true, organization: true }
+    if (req.body.role && !role) {
+      throw new HttpError(500, "The selected role is not configured");
+    }
+
+    const finalRole = req.body.role ?? target.role.name;
+    const finalOrganizationId =
+      req.body.organizationId === undefined ? target.organizationId : req.body.organizationId;
+    if (finalRole === ROLES.ORGANIZATION_ADMIN && !finalOrganizationId) {
+      throw new HttpError(400, "Organization administrators must belong to an organization");
+    }
+    if (finalOrganizationId) {
+      const organization = await prisma.organization.findUnique({
+        where: { id: finalOrganizationId },
+        select: { id: true }
+      });
+      if (!organization) throw new HttpError(400, "The selected organization does not exist");
+    }
+
+    const passwordHash = req.body.password
+      ? await bcrypt.hash(req.body.password, 12)
+      : undefined;
+    const shouldRevokeSessions = Boolean(passwordHash) || req.body.isActive === false;
+
+    const user = await prisma.$transaction(async (transaction) => {
+      const updatedUser = await transaction.user.update({
+        where: { id: req.params.id },
+        data: {
+          firstName: req.body.firstName,
+          lastName: req.body.lastName,
+          isActive: req.body.isActive,
+          organizationId: req.body.organizationId,
+          roleId: role?.id,
+          passwordHash
+        },
+        include: { role: true, organization: true }
+      });
+
+      if (shouldRevokeSessions) {
+        await transaction.session.updateMany({
+          where: { userId: target.id, revokedAt: null },
+          data: { revokedAt: new Date() }
+        });
+      }
+
+      return updatedUser;
     });
     res.json({ data: publicUser(user) });
   })

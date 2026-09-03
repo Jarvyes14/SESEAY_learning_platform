@@ -10,6 +10,7 @@ import InstructorDashboardPage from "./pages/InstructorDashboardPage.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
 import NotFoundPage from "./pages/NotFoundPage.jsx";
 import ProgressPage from "./pages/ProgressPage.jsx";
+import SessionsPage from "./pages/SessionsPage.jsx";
 import StudentDashboardPage from "./pages/StudentDashboardPage.jsx";
 import UsersPage from "./pages/UsersPage.jsx";
 
@@ -38,6 +39,7 @@ export default function App() {
           <Route path="progress" element={<ProgressPage />} />
           <Route path="grades" element={<GradesPage />} />
           <Route path="certificates" element={<CertificatesPage />} />
+          <Route path="sessions" element={<SessionsPage />} />
         </Route>
       </Route>
       <Route path="*" element={<NotFoundPage />} />

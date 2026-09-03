@@ -5,6 +5,7 @@ import {
   GraduationCap,
   LayoutDashboard,
   LogOut,
+  MonitorSmartphone,
   ShieldCheck,
   Users
 } from "lucide-react";
@@ -50,7 +51,7 @@ const linksByRole = {
 export default function Header() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const links = linksByRole[user?.role] ?? [];
+  const links = [...(linksByRole[user?.role] ?? []), ["Sesiones", "/sessions", MonitorSmartphone]];
 
   async function handleLogout() {
     await logout();
@@ -99,4 +100,3 @@ export default function Header() {
     </header>
   );
 }
-

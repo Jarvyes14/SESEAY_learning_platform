@@ -25,6 +25,7 @@ export default function UsersPage() {
   const [organizationForm, setOrganizationForm] = useState({ name: "", institutionName: "", slug: "" });
   const [showUserForm, setShowUserForm] = useState(false);
   const [showOrganizationForm, setShowOrganizationForm] = useState(false);
+  const [submitting, setSubmitting] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -38,6 +39,12 @@ export default function UsersPage() {
       setUsers(userResult.data);
       setRoles(roleResult.data);
       setOrganizations(organizationResult.data);
+      setForm((current) =>
+        roleResult.data.some((role) => role.name === current.role)
+          ? current
+          : { ...current, role: roleResult.data[0]?.name ?? "" }
+      );
+      setError("");
     } catch (requestError) {
       setError(requestError.message);
     }
@@ -48,6 +55,8 @@ export default function UsersPage() {
   async function createUser(event) {
     event.preventDefault();
     setError("");
+    setMessage("");
+    setSubmitting("user");
     try {
       await api("/users", {
         method: "POST",
@@ -62,12 +71,16 @@ export default function UsersPage() {
       await load();
     } catch (requestError) {
       setError(requestError.message);
+    } finally {
+      setSubmitting("");
     }
   }
 
   async function createOrganization(event) {
     event.preventDefault();
     setError("");
+    setMessage("");
+    setSubmitting("organization");
     try {
       await api("/organizations", {
         method: "POST",
@@ -79,21 +92,43 @@ export default function UsersPage() {
       await load();
     } catch (requestError) {
       setError(requestError.message);
+    } finally {
+      setSubmitting("");
     }
   }
 
   async function toggleUser(target) {
-    await api(`/users/${target.id}`, {
-      method: "PATCH",
-      body: JSON.stringify({ isActive: !target.isActive })
-    });
-    await load();
+    setError("");
+    setMessage("");
+    setSubmitting(target.id);
+    try {
+      await api(`/users/${target.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ isActive: !target.isActive })
+      });
+      setMessage(`The account for ${target.email} is now ${target.isActive ? "inactive" : "active"}.`);
+      await load();
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setSubmitting("");
+    }
   }
 
   async function deleteUser(target) {
     if (!window.confirm(`Delete ${target.email}? This cannot be undone.`)) return;
-    await api(`/users/${target.id}`, { method: "DELETE" });
-    await load();
+    setError("");
+    setMessage("");
+    setSubmitting(target.id);
+    try {
+      await api(`/users/${target.id}`, { method: "DELETE" });
+      setMessage(`The account for ${target.email} was deleted.`);
+      await load();
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setSubmitting("");
+    }
   }
 
   return (
@@ -105,9 +140,11 @@ export default function UsersPage() {
         actions={
           <>
             <DisabledButton>Bulk CSV import</DisabledButton>
-            <button type="button" className="btn-secondary" onClick={() => setShowOrganizationForm((value) => !value)}>
-              <Building2 size={16} /> New organization
-            </button>
+            {["platform_admin", "government_admin"].includes(currentUser.role) && (
+              <button type="button" className="btn-secondary" onClick={() => setShowOrganizationForm((value) => !value)}>
+                <Building2 size={16} /> New organization
+              </button>
+            )}
             <button type="button" className="btn-primary" onClick={() => setShowUserForm((value) => !value)}>
               <UserPlus size={16} /> New user
             </button>
@@ -122,7 +159,9 @@ export default function UsersPage() {
           <FormField label="Organization name" value={organizationForm.name} onChange={(value) => setOrganizationForm({ ...organizationForm, name: value })} />
           <FormField label="Certificate institution name" value={organizationForm.institutionName} onChange={(value) => setOrganizationForm({ ...organizationForm, institutionName: value })} />
           <FormField label="Slug" value={organizationForm.slug} onChange={(value) => setOrganizationForm({ ...organizationForm, slug: value })} />
-          <button className="btn-primary md:col-span-3" type="submit"><Plus size={16} /> Create organization</button>
+          <button className="btn-primary md:col-span-3" type="submit" disabled={submitting !== ""}>
+            <Plus size={16} /> {submitting === "organization" ? "Creating…" : "Create organization"}
+          </button>
         </form>
       )}
 
@@ -131,21 +170,36 @@ export default function UsersPage() {
           <FormField label="First name" value={form.firstName} onChange={(value) => setForm({ ...form, firstName: value })} />
           <FormField label="Last name" value={form.lastName} onChange={(value) => setForm({ ...form, lastName: value })} />
           <FormField label="Email" type="email" value={form.email} onChange={(value) => setForm({ ...form, email: value })} />
-          <FormField label="Temporary password" type="password" value={form.password} onChange={(value) => setForm({ ...form, password: value })} />
+          <FormField label="Temporary password" type="password" minLength={8} maxLength={72} autoComplete="new-password" value={form.password} onChange={(value) => setForm({ ...form, password: value })} />
           <label>
             <span className="mb-2 block text-sm font-semibold">Role</span>
             <select className="input-field" value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}>
               {roles.map((role) => <option key={role.id} value={role.name}>{role.displayName}</option>)}
             </select>
           </label>
-          <label>
-            <span className="mb-2 block text-sm font-semibold">Organization</span>
-            <select className="input-field" value={form.organizationId} onChange={(event) => setForm({ ...form, organizationId: event.target.value })}>
-              <option value="">No organization</option>
-              {organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}
-            </select>
-          </label>
-          <button className="btn-primary md:col-span-2" type="submit"><UserPlus size={16} /> Create user</button>
+          {currentUser.role === "organization_admin" ? (
+            <div>
+              <span className="mb-2 block text-sm font-semibold">Organization</span>
+              <p className="input-field bg-surface-muted">{currentUser.organization?.name}</p>
+            </div>
+          ) : (
+            <label>
+              <span className="mb-2 block text-sm font-semibold">Organization</span>
+              <select
+                className="input-field"
+                value={form.organizationId}
+                onChange={(event) => setForm({ ...form, organizationId: event.target.value })}
+                required={form.role === "organization_admin"}
+              >
+                <option value="">No organization</option>
+                {organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}
+              </select>
+            </label>
+          )}
+          <p className="text-xs text-text-secondary md:col-span-2">Passwords must contain between 8 and 72 characters. Share temporary credentials through a secure channel.</p>
+          <button className="btn-primary md:col-span-2" type="submit" disabled={submitting !== "" || !roles.length}>
+            <UserPlus size={16} /> {submitting === "user" ? "Creating…" : "Create user"}
+          </button>
         </form>
       )}
 
@@ -184,9 +238,19 @@ export default function UsersPage() {
                     <td className="px-5 py-4"><StatusBadge value={target.isActive ? "ACTIVE" : "ARCHIVED"} /></td>
                     <td className="px-5 py-4">
                       <div className="flex gap-2">
-                        <button type="button" className="rounded-md border border-border p-2 text-text-secondary hover:text-primary" onClick={() => toggleUser(target)} title="Toggle account status"><Power size={16} /></button>
+                        {currentUser.id !== target.id && (
+                          <button
+                            type="button"
+                            className="rounded-md border border-border p-2 text-text-secondary hover:text-primary disabled:opacity-60"
+                            onClick={() => toggleUser(target)}
+                            title={target.isActive ? "Deactivate account" : "Activate account"}
+                            disabled={submitting !== ""}
+                          >
+                            <Power size={16} />
+                          </button>
+                        )}
                         {currentUser.role === "platform_admin" && currentUser.id !== target.id && (
-                          <button type="button" className="rounded-md border border-border p-2 text-text-secondary hover:text-error" onClick={() => deleteUser(target)} title="Delete user"><Trash2 size={16} /></button>
+                          <button type="button" className="rounded-md border border-border p-2 text-text-secondary hover:text-error disabled:opacity-60" onClick={() => deleteUser(target)} title="Delete user" disabled={submitting !== ""}><Trash2 size={16} /></button>
                         )}
                       </div>
                     </td>
@@ -203,12 +267,11 @@ export default function UsersPage() {
   );
 }
 
-function FormField({ label, value, onChange, type = "text" }) {
+function FormField({ label, value, onChange, type = "text", ...inputProps }) {
   return (
     <label>
       <span className="mb-2 block text-sm font-semibold">{label}</span>
-      <input className="input-field" type={type} value={value} onChange={(event) => onChange(event.target.value)} required />
+      <input className="input-field" type={type} value={value} onChange={(event) => onChange(event.target.value)} required {...inputProps} />
     </label>
   );
 }
-

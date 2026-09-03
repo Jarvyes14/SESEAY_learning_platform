@@ -106,6 +106,7 @@ POSTGRES_DB=integrity_learning
 
 JWT_SECRET=CAMBIA_ESTE_VALOR_POR_UN_SECRETO_LARGO
 JWT_EXPIRES_IN=7d
+MAX_ACTIVE_SESSIONS=5
 COOKIE_NAME=integrity_token
 COOKIE_SECURE=true
 CLIENT_URL=https://capacitacion.tudominio.com
@@ -114,6 +115,14 @@ PGADMIN_PORT=5050
 PGADMIN_DEFAULT_EMAIL=admin@tudominio.com
 PGADMIN_DEFAULT_PASSWORD=CAMBIA_ESTE_PASSWORD
 ```
+
+Importante:
+
+```env
+PUBLIC_API_URL=/api
+```
+
+Dejalo asi si frontend y backend usan el mismo dominio. No pongas `https://` solo, porque el frontend intentara llamar URLs rotas como `https://auth/login`.
 
 Genera un `JWT_SECRET` seguro con:
 
@@ -133,6 +142,13 @@ Usa el compose de produccion:
 
 ```bash
 docker compose -f docker-compose.prod.yml up --build -d
+```
+
+Si cambiaste `PUBLIC_API_URL`, reconstruye el frontend para que la variable quede incluida en el build:
+
+```bash
+docker compose -f docker-compose.prod.yml build --no-cache frontend
+docker compose -f docker-compose.prod.yml up -d
 ```
 
 Verifica los contenedores:
@@ -171,6 +187,8 @@ Role: platform_admin
 ```
 
 Despues de entrar, crea los usuarios reales desde la seccion `Users`.
+
+Cada inicio de sesion se registra por dispositivo. Los usuarios pueden revisar y revocar sus accesos desde `Sesiones`; al superar `MAX_ACTIVE_SESSIONS`, se cierra automaticamente la sesion activa mas antigua. Desactivar una cuenta o cambiar su contrasena tambien revoca sus sesiones abiertas.
 
 ## 6. Certificado HTTPS
 
