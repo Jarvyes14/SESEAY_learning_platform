@@ -1,4 +1,4 @@
-import { Building2, Plus, Power, Trash2, UserPlus } from "lucide-react";
+import { Building2, Pencil, Plus, Power, Trash2, UserPlus, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import DisabledButton from "../components/DisabledButton.jsx";
 import EmptyState from "../components/EmptyState.jsx";
@@ -16,6 +16,18 @@ const initialUser = {
   organizationId: ""
 };
 
+function userToForm(user) {
+  return {
+    firstName: user.firstName,
+    lastName: user.lastName,
+    email: user.email,
+    password: "",
+    role: user.role,
+    organizationId: user.organization?.id ?? "",
+    isActive: user.isActive
+  };
+}
+
 export default function UsersPage() {
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState([]);
@@ -24,6 +36,8 @@ export default function UsersPage() {
   const [form, setForm] = useState(initialUser);
   const [organizationForm, setOrganizationForm] = useState({ name: "", institutionName: "", slug: "" });
   const [showUserForm, setShowUserForm] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
+  const [editForm, setEditForm] = useState(null);
   const [showOrganizationForm, setShowOrganizationForm] = useState(false);
   const [submitting, setSubmitting] = useState("");
   const [message, setMessage] = useState("");
@@ -107,6 +121,49 @@ export default function UsersPage() {
         body: JSON.stringify({ isActive: !target.isActive })
       });
       setMessage(`The account for ${target.email} is now ${target.isActive ? "inactive" : "active"}.`);
+      await load();
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setSubmitting("");
+    }
+  }
+
+  function beginEdit(target) {
+    setEditingUser(target);
+    setEditForm(userToForm(target));
+    setShowUserForm(false);
+    setError("");
+    setMessage("");
+  }
+
+  function cancelEdit() {
+    setEditingUser(null);
+    setEditForm(null);
+  }
+
+  async function updateUser(event) {
+    event.preventDefault();
+    setError("");
+    setMessage("");
+    setSubmitting(editingUser.id);
+    try {
+      const payload = {
+        firstName: editForm.firstName,
+        lastName: editForm.lastName,
+        email: editForm.email,
+        role: editForm.role,
+        organizationId: editForm.organizationId || null,
+        isActive: editForm.isActive
+      };
+      if (editForm.password) payload.password = editForm.password;
+
+      await api(`/users/${editingUser.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload)
+      });
+      setMessage(`The account for ${editForm.email} was updated.`);
+      cancelEdit();
       await load();
     } catch (requestError) {
       setError(requestError.message);
@@ -203,6 +260,83 @@ export default function UsersPage() {
         </form>
       )}
 
+      {editingUser && editForm && (
+        <form onSubmit={updateUser} className="panel mt-6 grid gap-4 p-6 md:grid-cols-2">
+          <div className="flex items-center justify-between md:col-span-2">
+            <div>
+              <p className="eyebrow">Edit account</p>
+              <h2 className="mt-1 text-xl font-bold">{editingUser.firstName} {editingUser.lastName}</h2>
+            </div>
+            <button type="button" className="rounded-md p-2 text-text-secondary hover:bg-surface-muted" onClick={cancelEdit} aria-label="Close editor">
+              <X size={18} />
+            </button>
+          </div>
+          <FormField label="First name" value={editForm.firstName} onChange={(value) => setEditForm({ ...editForm, firstName: value })} />
+          <FormField label="Last name" value={editForm.lastName} onChange={(value) => setEditForm({ ...editForm, lastName: value })} />
+          <FormField label="Email" type="email" value={editForm.email} onChange={(value) => setEditForm({ ...editForm, email: value })} />
+          <FormField
+            label="New password (optional)"
+            type="password"
+            minLength={8}
+            maxLength={72}
+            autoComplete="new-password"
+            required={false}
+            value={editForm.password}
+            onChange={(value) => setEditForm({ ...editForm, password: value })}
+          />
+          <label>
+            <span className="mb-2 block text-sm font-semibold">Role</span>
+            <select
+              className="input-field"
+              value={editForm.role}
+              disabled={editingUser.id === currentUser.id}
+              onChange={(event) => setEditForm({ ...editForm, role: event.target.value })}
+            >
+              {roles.map((role) => <option key={role.id} value={role.name}>{role.displayName}</option>)}
+            </select>
+          </label>
+          {currentUser.role === "organization_admin" ? (
+            <div>
+              <span className="mb-2 block text-sm font-semibold">Organization</span>
+              <p className="input-field bg-surface-muted">{currentUser.organization?.name}</p>
+            </div>
+          ) : (
+            <label>
+              <span className="mb-2 block text-sm font-semibold">Organization</span>
+              <select
+                className="input-field"
+                value={editForm.organizationId}
+                disabled={editingUser.id === currentUser.id}
+                required={editForm.role === "organization_admin"}
+                onChange={(event) => setEditForm({ ...editForm, organizationId: event.target.value })}
+              >
+                <option value="">No organization</option>
+                {organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}
+              </select>
+            </label>
+          )}
+          <label className="flex items-center gap-3 rounded-md border border-border p-4 md:col-span-2">
+            <input
+              type="checkbox"
+              checked={editForm.isActive}
+              disabled={editingUser.id === currentUser.id}
+              onChange={(event) => setEditForm({ ...editForm, isActive: event.target.checked })}
+            />
+            <span>
+              <strong className="block text-sm">Active account</strong>
+              <span className="text-xs text-text-secondary">Inactive users cannot sign in.</span>
+            </span>
+          </label>
+          <p className="text-xs text-text-secondary md:col-span-2">Changing the email, password, role, organization, or status closes the user's active sessions.</p>
+          <div className="flex justify-end gap-3 md:col-span-2">
+            <button type="button" className="btn-secondary" onClick={cancelEdit} disabled={submitting !== ""}>Cancel</button>
+            <button type="submit" className="btn-primary" disabled={submitting !== ""}>
+              {submitting === editingUser.id ? "Saving…" : "Save changes"}
+            </button>
+          </div>
+        </form>
+      )}
+
       <section className="mt-8">
         <h2 className="text-xl font-bold">Organizations ({organizations.length})</h2>
         {organizations.length ? (
@@ -238,6 +372,15 @@ export default function UsersPage() {
                     <td className="px-5 py-4"><StatusBadge value={target.isActive ? "ACTIVE" : "ARCHIVED"} /></td>
                     <td className="px-5 py-4">
                       <div className="flex gap-2">
+                        <button
+                          type="button"
+                          className="rounded-md border border-border p-2 text-text-secondary hover:text-primary disabled:opacity-60"
+                          onClick={() => beginEdit(target)}
+                          title="Edit user"
+                          disabled={submitting !== ""}
+                        >
+                          <Pencil size={16} />
+                        </button>
                         {currentUser.id !== target.id && (
                           <button
                             type="button"
@@ -267,11 +410,11 @@ export default function UsersPage() {
   );
 }
 
-function FormField({ label, value, onChange, type = "text", ...inputProps }) {
+function FormField({ label, value, onChange, type = "text", required = true, ...inputProps }) {
   return (
     <label>
       <span className="mb-2 block text-sm font-semibold">{label}</span>
-      <input className="input-field" type={type} value={value} onChange={(event) => onChange(event.target.value)} required {...inputProps} />
+      <input className="input-field" type={type} value={value} onChange={(event) => onChange(event.target.value)} required={required} {...inputProps} />
     </label>
   );
 }

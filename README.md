@@ -110,6 +110,8 @@ MAX_ACTIVE_SESSIONS=5
 COOKIE_NAME=integrity_token
 COOKIE_SECURE=true
 CLIENT_URL=https://capacitacion.tudominio.com
+INITIAL_ADMIN_EMAIL=admin@tudominio.com
+INITIAL_ADMIN_PASSWORD=CAMBIA_ESTA_CONTRASENA_INICIAL
 
 PGADMIN_PORT=5050
 PGADMIN_DEFAULT_EMAIL=admin@tudominio.com
@@ -178,15 +180,15 @@ https://capacitacion.tudominio.com/api
 https://capacitacion.tudominio.com/health
 ```
 
-Cuenta inicial:
+En una instalacion nueva, el `seed` crea una sola cuenta inicial usando los valores de tu archivo `.env`:
 
 ```text
-Email: admin@example.gov
-Password: Admin123!
+Email: valor de INITIAL_ADMIN_EMAIL
+Password: valor de INITIAL_ADMIN_PASSWORD
 Role: platform_admin
 ```
 
-Despues de entrar, crea los usuarios reales desde la seccion `Users`.
+El `seed` nunca reemplaza la contrasena ni los datos de un administrador existente. Despues de entrar, puedes crear y editar usuarios reales desde la seccion `Users`, incluyendo su correo, rol, organizacion, estado y contrasena temporal.
 
 Cada inicio de sesion se registra por dispositivo. Los usuarios pueden revisar y revocar sus accesos desde `Sesiones`; al superar `MAX_ACTIVE_SESSIONS`, se cierra automaticamente la sesion activa mas antigua. Desactivar una cuenta o cambiar su contrasena tambien revoca sus sesiones abiertas.
 

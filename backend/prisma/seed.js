@@ -21,24 +21,37 @@ async function main() {
     });
   }
 
-  await prisma.user.upsert({
-    where: { email: "admin@example.gov" },
-    update: {
-      passwordHash: await bcrypt.hash("Admin123!", 12),
-      roleId: createdRoles.platform_admin.id,
-      isActive: true
-    },
-    create: {
-      email: "admin@example.gov",
-      passwordHash: await bcrypt.hash("Admin123!", 12),
-      firstName: "Platform",
-      lastName: "Administrator",
-      roleId: createdRoles.platform_admin.id
-    }
+  const existingAdministrator = await prisma.user.findFirst({
+    where: { roleId: createdRoles.platform_admin.id },
+    select: { id: true }
   });
 
+  if (!existingAdministrator) {
+    const email = process.env.INITIAL_ADMIN_EMAIL?.trim().toLowerCase();
+    const password = process.env.INITIAL_ADMIN_PASSWORD;
+
+    if (!email || !email.includes("@")) {
+      throw new Error("INITIAL_ADMIN_EMAIL is required to create the first administrator");
+    }
+    if (!password || password.length < 12 || password.length > 72) {
+      throw new Error("INITIAL_ADMIN_PASSWORD must contain between 12 and 72 characters");
+    }
+
+    await prisma.user.create({
+      data: {
+        email,
+        passwordHash: await bcrypt.hash(password, 12),
+        firstName: "Platform",
+        lastName: "Administrator",
+        roleId: createdRoles.platform_admin.id
+      }
+    });
+    console.log(`Initial administrator created: ${email}`);
+  } else {
+    console.log("An existing platform administrator was preserved");
+  }
+
   console.log("Seed complete");
-  console.log("Administrator: admin@example.gov / Admin123!");
   console.log("No demo organizations, courses, enrollments, grades, or certificates are seeded.");
 }
 

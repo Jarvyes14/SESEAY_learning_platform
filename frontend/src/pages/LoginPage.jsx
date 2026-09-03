@@ -13,8 +13,8 @@ function homeForRole(role) {
 export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState("admin@example.gov");
-  const [password, setPassword] = useState("Admin123!");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -54,9 +54,6 @@ export default function LoginPage() {
           <button type="submit" className="btn-primary mt-6 w-full" disabled={submitting}>
             {submitting ? "Signing in..." : "Sign in"} <ArrowRight size={17} />
           </button>
-          <div className="mt-6 rounded-md border border-border bg-background p-4 text-xs text-text-secondary">
-            Initial administrator: <strong>admin@example.gov</strong> / <strong>Admin123!</strong>
-          </div>
         </form>
       </section>
       <aside className="hidden items-center bg-primary p-12 text-inverse lg:flex">
@@ -71,4 +68,3 @@ export default function LoginPage() {
     </div>
   );
 }
-

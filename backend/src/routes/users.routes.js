@@ -165,6 +165,7 @@ router.patch(
   validate(idParamSchema, "params"),
   validate(
     z.object({
+      email: z.string().trim().email().transform((value) => value.toLowerCase()).optional(),
       firstName: z.string().trim().min(2).max(80).optional(),
       lastName: z.string().trim().min(2).max(80).optional(),
       isActive: z.boolean().optional(),
@@ -220,6 +221,14 @@ router.patch(
       req.body.organizationId = req.user.organizationId;
     }
 
+    if (req.body.email && req.body.email !== target.email) {
+      const existingUser = await prisma.user.findUnique({
+        where: { email: req.body.email },
+        select: { id: true }
+      });
+      if (existingUser) throw new HttpError(409, "An account with this email already exists");
+    }
+
     const role = req.body.role
       ? await prisma.role.findUnique({ where: { name: req.body.role } })
       : null;
@@ -244,12 +253,19 @@ router.patch(
     const passwordHash = req.body.password
       ? await bcrypt.hash(req.body.password, 12)
       : undefined;
-    const shouldRevokeSessions = Boolean(passwordHash) || req.body.isActive === false;
+    const permissionsChanged =
+      (req.body.role !== undefined && req.body.role !== target.role.name) ||
+      (req.body.organizationId !== undefined &&
+        req.body.organizationId !== target.organizationId);
+    const emailChanged = req.body.email !== undefined && req.body.email !== target.email;
+    const shouldRevokeSessions =
+      Boolean(passwordHash) || emailChanged || permissionsChanged || req.body.isActive === false;
 
     const user = await prisma.$transaction(async (transaction) => {
       const updatedUser = await transaction.user.update({
         where: { id: req.params.id },
         data: {
+          email: req.body.email,
           firstName: req.body.firstName,
           lastName: req.body.lastName,
           isActive: req.body.isActive,
