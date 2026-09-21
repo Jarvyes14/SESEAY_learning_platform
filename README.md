@@ -20,6 +20,20 @@ Servicios incluidos:
 - `postgres`: base de datos PostgreSQL
 - `pgadmin`: opcional, solo para administracion
 
+## Modulo de cursos
+
+Los administradores e instructores autorizados pueden crear cursos como borrador, organizarlos en bloques y lecciones, agregar contenidos y ejercicios, configurar calificacion y certificados, seleccionar la audiencia y publicarlos.
+
+La audiencia de un curso puede limitarse a:
+
+- Todas las cuentas de un rol.
+- Una organizacion.
+- Una seleccion de usuarios especificos.
+
+Cualquier cuenta activa puede participar como aprendiz, independientemente de que su rol sea administrador, docente o estudiante. El menu `My learning` muestra exclusivamente los cursos publicados asignados a su rol, organizacion o cuenta; el menu `Courses` permanece separado para la construccion y administracion de contenido.
+
+El `seed` crea de forma idempotente el curso publicado `Tutorial para crear cursos en la plataforma`, con cuatro bloques, ocho lecciones y ejemplos de los contenidos y ejercicios disponibles.
+
 ## 1. Configurar DNS en GoDaddy
 
 En GoDaddy, entra a la administracion DNS del dominio y crea un registro tipo `A`.
@@ -195,11 +209,13 @@ Password: valor de INITIAL_ADMIN_PASSWORD
 Role: platform_admin
 ```
 
-El `seed` nunca reemplaza la contrasena ni los datos de un administrador existente. Despues de entrar, puedes crear y editar usuarios reales desde la seccion `Users`, incluyendo su correo, rol, organizacion, estado y contrasena temporal.
+El `seed` nunca reemplaza la contrasena ni los datos de un administrador existente. Despues de entrar, los administradores autorizan correos desde la seccion `Users`, indicando el rol y, cuando corresponda, la organizacion. La autorizacion no crea una cuenta ni una contrasena.
 
-Las invitaciones y la recuperacion de contrasenas requieren las variables `SMTP_*`. El nombre de la plataforma, correo de soporte, limite de sesiones, duracion de enlaces y politica de contrasenas se administran visualmente desde `Settings`. Los secretos SMTP permanecen exclusivamente en `.env`.
+El propietario del correo autorizado debe abrir `Crear una cuenta`, capturar su nombre y elegir su propia contrasena. Los correos que no esten autorizados son rechazados y cada autorizacion solo puede registrarse una vez. Los administradores conservan la capacidad de editar, activar, desactivar o eliminar cuentas ya registradas.
 
-En desarrollo, Docker Compose incluye Mailpit como buzon SMTP local en `http://localhost:8025`. Los correos de invitacion y recuperacion aparecen ahi. En produccion debes reemplazar `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` y `SMTP_FROM` con los datos de tu proveedor de correo.
+La recuperacion de contrasenas requiere las variables `SMTP_*`. El nombre de la plataforma, correo de soporte, limite de sesiones, duracion de enlaces y politica de contrasenas se administran visualmente desde `Settings`. Los secretos SMTP permanecen exclusivamente en `.env`.
+
+En desarrollo, Docker Compose incluye Mailpit como buzon SMTP local en `http://localhost:8025`. Los correos de recuperacion aparecen ahi. En produccion debes reemplazar `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` y `SMTP_FROM` con los datos de tu proveedor de correo.
 
 Cada inicio de sesion se registra por dispositivo. Los usuarios pueden revisar y revocar sus accesos desde `Sesiones`; al superar `MAX_ACTIVE_SESSIONS`, se cierra automaticamente la sesion activa mas antigua. Desactivar una cuenta o cambiar su contrasena tambien revoca sus sesiones abiertas.
 

@@ -8,23 +8,24 @@ import CoursePlayerPage from "./pages/CoursePlayerPage.jsx";
 import GradesPage from "./pages/GradesPage.jsx";
 import InstructorDashboardPage from "./pages/InstructorDashboardPage.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
+import RegisterPage from "./pages/RegisterPage.jsx";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage.jsx";
 import ResetPasswordPage from "./pages/ResetPasswordPage.jsx";
 import ChangePasswordPage from "./pages/ChangePasswordPage.jsx";
 import NotFoundPage from "./pages/NotFoundPage.jsx";
 import ProgressPage from "./pages/ProgressPage.jsx";
-import SessionsPage from "./pages/SessionsPage.jsx";
 import SettingsPage from "./pages/SettingsPage.jsx";
 import StudentDashboardPage from "./pages/StudentDashboardPage.jsx";
 import UsersPage from "./pages/UsersPage.jsx";
 
 const adminRoles = ["platform_admin", "government_admin", "organization_admin"];
-const editorRoles = ["platform_admin", "government_admin", "instructor"];
+const editorRoles = ["platform_admin", "government_admin", "organization_admin", "instructor"];
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route element={<ProtectedRoute />}>
@@ -42,13 +43,13 @@ export default function App() {
             <Route path="courses/:id/builder" element={<CourseBuilderPage />} />
           </Route>
           <Route element={<ProtectedRoute roles={["student"]} />}>
-            <Route path="student" element={<StudentDashboardPage />} />
-            <Route path="courses/:id/class" element={<CoursePlayerPage />} />
+            <Route path="student" element={<Navigate to="/learning" replace />} />
           </Route>
+          <Route path="learning" element={<StudentDashboardPage />} />
+          <Route path="courses/:id/class" element={<CoursePlayerPage />} />
           <Route path="progress" element={<ProgressPage />} />
           <Route path="grades" element={<GradesPage />} />
           <Route path="certificates" element={<CertificatesPage />} />
-          <Route path="sessions" element={<SessionsPage />} />
           <Route path="change-password" element={<ChangePasswordPage />} />
         </Route>
       </Route>

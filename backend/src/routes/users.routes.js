@@ -10,10 +10,8 @@ import { allowRoles } from "../middleware/roles.js";
 import { validate } from "../middleware/validate.js";
 import { publicUser } from "../utils/serializers.js";
 import { idParamSchema, paginationSchema } from "../validation/common.js";
-import { sendInvitationEmail } from "../services/email.service.js";
 import {
   assertPasswordPolicy,
-  generateTemporaryPassword,
   getPlatformSettings
 } from "../services/platform-settings.service.js";
 
@@ -50,6 +48,104 @@ router.get(
 );
 
 router.get(
+  "/authorized-emails",
+  allowRoles(...ADMIN_ROLES),
+  asyncHandler(async (req, res) => {
+    const data = await prisma.authorizedEmail.findMany({
+      where:
+        req.user.role.name === ROLES.ORGANIZATION_ADMIN
+          ? { organizationId: req.user.organizationId }
+          : {},
+      include: { role: true, organization: true },
+      orderBy: { createdAt: "desc" }
+    });
+    res.json({
+      data: data.map((entry) => ({
+        id: entry.id,
+        email: entry.email,
+        role: entry.role.name,
+        organization: entry.organization,
+        registeredAt: entry.registeredAt,
+        createdAt: entry.createdAt
+      }))
+    });
+  })
+);
+
+router.post(
+  "/authorized-emails",
+  allowRoles(...ADMIN_ROLES),
+  validate(
+    z.object({
+      email: z.string().trim().email().transform((value) => value.toLowerCase()),
+      role: z.enum(roleNames),
+      organizationId: z.string().uuid().nullable().optional()
+    })
+  ),
+  asyncHandler(async (req, res) => {
+    if (!manageableRolesFor(req.user).includes(req.body.role)) {
+      throw new HttpError(403, "You cannot authorize this role");
+    }
+    if (req.user.role.name === ROLES.ORGANIZATION_ADMIN) {
+      req.body.organizationId = req.user.organizationId;
+    }
+    if (req.body.role === ROLES.ORGANIZATION_ADMIN && !req.body.organizationId) {
+      throw new HttpError(400, "Organization administrators must belong to an organization");
+    }
+
+    const [role, existingUser, organization] = await Promise.all([
+      prisma.role.findUnique({ where: { name: req.body.role } }),
+      prisma.user.findUnique({ where: { email: req.body.email }, select: { id: true } }),
+      req.body.organizationId
+        ? prisma.organization.findUnique({ where: { id: req.body.organizationId }, select: { id: true } })
+        : null
+    ]);
+    if (!role) throw new HttpError(500, "The selected role is not configured");
+    if (existingUser) throw new HttpError(409, "An account with this email already exists");
+    if (req.body.organizationId && !organization) {
+      throw new HttpError(400, "The selected organization does not exist");
+    }
+
+    const entry = await prisma.authorizedEmail.create({
+      data: {
+        email: req.body.email,
+        roleId: role.id,
+        organizationId: req.body.organizationId
+      },
+      include: { role: true, organization: true }
+    });
+    res.status(201).json({
+      data: {
+        id: entry.id,
+        email: entry.email,
+        role: entry.role.name,
+        organization: entry.organization,
+        registeredAt: entry.registeredAt,
+        createdAt: entry.createdAt
+      }
+    });
+  })
+);
+
+router.delete(
+  "/authorized-emails/:id",
+  allowRoles(...ADMIN_ROLES),
+  validate(idParamSchema, "params"),
+  asyncHandler(async (req, res) => {
+    const entry = await prisma.authorizedEmail.findUnique({ where: { id: req.params.id } });
+    if (!entry) throw new HttpError(404, "Authorized email not found");
+    if (
+      req.user.role.name === ROLES.ORGANIZATION_ADMIN &&
+      entry.organizationId !== req.user.organizationId
+    ) {
+      throw new HttpError(403, "This email is outside your organization");
+    }
+    await prisma.authorizedEmail.delete({ where: { id: entry.id } });
+    res.status(204).send();
+  })
+);
+
+router.get(
   "/",
   allowRoles(...ADMIN_ROLES),
   validate(paginationSchema.extend({ role: z.enum(roleNames).optional() }), "query"),
@@ -73,7 +169,21 @@ router.get(
     const [users, total] = await prisma.$transaction([
       prisma.user.findMany({
         where,
-        include: { role: true, organization: true },
+        include: {
+          role: true,
+          organization: true,
+          sessions: {
+            orderBy: { lastSeenAt: "desc" },
+            take: 5,
+            select: {
+              id: true,
+              ipAddress: true,
+              userAgent: true,
+              createdAt: true,
+              lastSeenAt: true
+            }
+          }
+        },
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * limit,
         take: limit
@@ -101,127 +211,6 @@ router.get(
       throw new HttpError(403, "User is outside your organization");
     }
     res.json({ data: publicUser(user) });
-  })
-);
-
-router.post(
-  "/",
-  allowRoles(...ADMIN_ROLES),
-  validate(
-    z.object({
-      email: z.string().trim().email().transform((value) => value.toLowerCase()),
-      firstName: z.string().trim().min(2).max(80),
-      lastName: z.string().trim().min(2).max(80),
-      role: z.enum(roleNames),
-      organizationId: z.string().uuid().nullable().optional()
-    })
-  ),
-  asyncHandler(async (req, res) => {
-    if (!manageableRolesFor(req.user).includes(req.body.role)) {
-      throw new HttpError(403, "You cannot create a user with this role");
-    }
-
-    if (req.user.role.name === ROLES.ORGANIZATION_ADMIN) {
-      if (!req.user.organizationId) {
-        throw new HttpError(403, "Your account is not assigned to an organization");
-      }
-      req.body.organizationId = req.user.organizationId;
-    }
-
-    if (req.body.role === ROLES.ORGANIZATION_ADMIN && !req.body.organizationId) {
-      throw new HttpError(400, "Organization administrators must belong to an organization");
-    }
-
-    const [role, existingUser, organization] = await Promise.all([
-      prisma.role.findUnique({ where: { name: req.body.role } }),
-      prisma.user.findUnique({ where: { email: req.body.email }, select: { id: true } }),
-      req.body.organizationId
-        ? prisma.organization.findUnique({
-            where: { id: req.body.organizationId },
-            select: { id: true }
-          })
-        : null
-    ]);
-
-    if (!role) throw new HttpError(500, "The selected role is not configured");
-    if (existingUser) throw new HttpError(409, "An account with this email already exists");
-    if (req.body.organizationId && !organization) {
-      throw new HttpError(400, "The selected organization does not exist");
-    }
-
-    const settings = await getPlatformSettings();
-    const temporaryPassword = generateTemporaryPassword(settings);
-    const user = await prisma.user.create({
-      data: {
-        email: req.body.email,
-        passwordHash: await bcrypt.hash(temporaryPassword, 12),
-        mustChangePassword: true,
-        firstName: req.body.firstName,
-        lastName: req.body.lastName,
-        roleId: role.id,
-        organizationId: req.body.organizationId
-      },
-      include: { role: true, organization: true }
-    });
-    let invitation;
-    try {
-      invitation = await sendInvitationEmail({ user, temporaryPassword, settings });
-    } catch (error) {
-      console.error("Invitation email delivery failed", error.message);
-      invitation = { sent: false, reason: "Email delivery failed" };
-    }
-    res.status(201).json({ data: publicUser(user), invitation });
-  })
-);
-
-router.post(
-  "/:id/invite",
-  allowRoles(...ADMIN_ROLES),
-  validate(idParamSchema, "params"),
-  asyncHandler(async (req, res) => {
-    const target = await prisma.user.findUnique({
-      where: { id: req.params.id },
-      include: { role: true, organization: true }
-    });
-    if (!target) throw new HttpError(404, "User not found");
-    if (target.id === req.user.id) throw new HttpError(400, "You cannot reinvite your own account");
-    if (req.user.role.name !== ROLES.PLATFORM_ADMIN && target.role.name === ROLES.PLATFORM_ADMIN) {
-      throw new HttpError(403, "Only a platform administrator can manage this account");
-    }
-    if (
-      req.user.role.name === ROLES.ORGANIZATION_ADMIN &&
-      (target.organizationId !== req.user.organizationId ||
-        !manageableRolesFor(req.user).includes(target.role.name))
-    ) {
-      throw new HttpError(403, "You cannot manage this account");
-    }
-
-    const settings = await getPlatformSettings();
-    const temporaryPassword = generateTemporaryPassword(settings);
-    const now = new Date();
-    await prisma.$transaction([
-      prisma.user.update({
-        where: { id: target.id },
-        data: {
-          passwordHash: await bcrypt.hash(temporaryPassword, 12),
-          mustChangePassword: true,
-          isActive: true
-        }
-      }),
-      prisma.session.updateMany({
-        where: { userId: target.id, revokedAt: null },
-        data: { revokedAt: now }
-      })
-    ]);
-
-    let invitation;
-    try {
-      invitation = await sendInvitationEmail({ user: target, temporaryPassword, settings });
-    } catch (error) {
-      console.error("Invitation email delivery failed", error.message);
-      invitation = { sent: false, reason: "Email delivery failed" };
-    }
-    res.json({ invitation });
   })
 );
 

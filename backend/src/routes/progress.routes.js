@@ -60,7 +60,8 @@ router.get(
                       attemptNumber: true,
                       score: true,
                       maxScore: true,
-                      status: true
+                      status: true,
+                      response: true
                     },
                     orderBy: { attemptNumber: "desc" }
                   }
@@ -120,6 +121,19 @@ router.post(
 );
 
 router.post(
+  "/activities/:id/content",
+  validate(idParamSchema, "params"),
+  validate(z.object({ confirmed: z.literal(true) })),
+  asyncHandler(async (req, res) => {
+    const progress = await requireAccessibleProgress(req.user.id, req.params.id);
+    if (!["EXTERNAL_LINK", "EMBEDDED_CONTENT", "INTERACTIVE_CONTENT"].includes(progress.activity.type)) {
+      throw new HttpError(400, "This activity is not confirmable content");
+    }
+    res.json({ data: await completeActivity(progress.id) });
+  })
+);
+
+router.post(
   "/activities/:id/video",
   validate(idParamSchema, "params"),
   validate(
@@ -165,7 +179,17 @@ router.post(
   asyncHandler(async (req, res) => {
     const progress = await requireAccessibleProgress(req.user.id, req.params.id);
     const activity = progress.activity;
-    if (!["QUESTIONS", "INCORRECT_SECTION", "ASSIGNMENT", "FINAL_EXAM"].includes(activity.type)) {
+    if (![
+      "QUESTIONS",
+      "INCORRECT_SECTION",
+      "ASSIGNMENT",
+      "FINAL_EXAM",
+      "CASE_STUDY",
+      "TRUE_FALSE",
+      "MATCHING",
+      "ORDERING",
+      "FILL_BLANKS"
+    ].includes(activity.type)) {
       throw new HttpError(400, "This activity does not accept submissions");
     }
     const attempts = await prisma.activityAttempt.count({
@@ -185,11 +209,53 @@ router.post(
       );
       if (missing) throw new HttpError(400, `Required assignment field missing: ${missing.label}`);
     }
-    if (["QUESTIONS", "FINAL_EXAM"].includes(activity.type)) {
+    if (["QUESTIONS", "FINAL_EXAM", "CASE_STUDY"].includes(activity.type)) {
       const questions = activity.content?.questions ?? [];
       const answers = req.body.response?.answers;
       if (!Array.isArray(answers) || answers.length !== questions.length || answers.some((answer) => !Number.isInteger(answer))) {
         throw new HttpError(400, "Every question must have a submitted answer");
+      }
+    }
+    if (activity.type === "TRUE_FALSE") {
+      const answers = req.body.response?.answers;
+      if (
+        !Array.isArray(answers) ||
+        answers.length !== (activity.content?.statements ?? []).length ||
+        answers.some((answer) => typeof answer !== "boolean")
+      ) {
+        throw new HttpError(400, "Every statement must have a true or false answer");
+      }
+    }
+    if (activity.type === "MATCHING") {
+      const matches = req.body.response?.matches;
+      if (
+        !Array.isArray(matches) ||
+        matches.length !== (activity.content?.pairs ?? []).length ||
+        matches.some((answer) => !Number.isInteger(answer))
+      ) {
+        throw new HttpError(400, "Every concept must have a selected match");
+      }
+    }
+    if (activity.type === "ORDERING") {
+      const order = req.body.response?.order;
+      const expectedLength = (activity.content?.items ?? []).length;
+      if (
+        !Array.isArray(order) ||
+        order.length !== expectedLength ||
+        new Set(order).size !== expectedLength ||
+        order.some((item) => !Number.isInteger(item) || item < 0 || item >= expectedLength)
+      ) {
+        throw new HttpError(400, "Submit every item in a valid order");
+      }
+    }
+    if (activity.type === "FILL_BLANKS") {
+      const answers = req.body.response?.answers;
+      if (
+        !Array.isArray(answers) ||
+        answers.length !== (activity.content?.sentences ?? []).length ||
+        answers.some((answer) => typeof answer !== "string")
+      ) {
+        throw new HttpError(400, "Complete every blank");
       }
     }
     const attempt = await prisma.activityAttempt.create({

@@ -1,5 +1,5 @@
 export function publicUser(user) {
-  return {
+  const serialized = {
     id: user.id,
     email: user.email,
     firstName: user.firstName,
@@ -16,6 +16,19 @@ export function publicUser(user) {
       : null,
     createdAt: user.createdAt
   };
+
+  if (user.sessions) {
+    serialized.lastAccessAt = user.sessions[0]?.lastSeenAt ?? null;
+    serialized.recentAccesses = user.sessions.map((session) => ({
+      id: session.id,
+      ipAddress: session.ipAddress,
+      userAgent: session.userAgent,
+      signedInAt: session.createdAt,
+      lastSeenAt: session.lastSeenAt
+    }));
+  }
+
+  return serialized;
 }
 
 export function publicSession(session, currentSessionId) {

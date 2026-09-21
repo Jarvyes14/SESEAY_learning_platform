@@ -28,8 +28,46 @@ export async function assertCourseEditor(user, courseId) {
   return course;
 }
 
+export function courseAudienceWhere(user) {
+  const audiences = [
+    { accessType: "ROLE", accessRoleId: user.roleId },
+    { accessType: "USERS", accessUsers: { some: { userId: user.id } } }
+  ];
+  if (user.organizationId) {
+    audiences.push({
+      accessType: "ORGANIZATION",
+      accessOrganizationId: user.organizationId
+    });
+  }
+  return { OR: audiences };
+}
+
+export async function assertCourseAccess(user, courseId) {
+  const course = await prisma.course.findFirst({
+    where: {
+      id: courseId,
+      status: "PUBLISHED",
+      ...courseAudienceWhere(user)
+    }
+  });
+  if (!course) throw new HttpError(403, "This course is not available for your account");
+  return course;
+}
+
 export function sanitizeActivity(activity, canEdit) {
-  if (canEdit || !["QUESTIONS", "FINAL_EXAM", "INCORRECT_SECTION"].includes(activity.type)) {
+  if (
+    canEdit ||
+    ![
+      "QUESTIONS",
+      "FINAL_EXAM",
+      "INCORRECT_SECTION",
+      "CASE_STUDY",
+      "TRUE_FALSE",
+      "MATCHING",
+      "ORDERING",
+      "FILL_BLANKS"
+    ].includes(activity.type)
+  ) {
     return activity;
   }
 
@@ -40,6 +78,36 @@ export function sanitizeActivity(activity, canEdit) {
   if (Array.isArray(content.sections)) {
     content.sections = content.sections.map(({ incorrect, ...section }) => section);
   }
-  return { ...activity, content };
-}
+  if (Array.isArray(content.statements)) {
+    content.statements = content.statements.map(({ correctAnswer, ...statement }) => statement);
+  }
+  if (Array.isArray(content.pairs)) {
+    content.leftItems = content.pairs.map((pair, index) => ({ id: index, text: pair.left }));
+    content.rightItems = content.pairs
+      .map((pair, index) => ({ id: index, text: pair.right }))
+      .reverse();
+    delete content.pairs;
+  }
+  if (Array.isArray(content.items)) {
+    content.displayItems = content.items
+      .map((text, index) => ({ id: index, text }))
+      .reverse();
+    delete content.items;
+  }
+  if (Array.isArray(content.sentences)) {
+    content.sentences = content.sentences.map(({ answer, caseSensitive, ...sentence }) => sentence);
+  }
+  const attempts = activity.attempts?.map((attempt) => {
+    if (!["QUESTIONS", "FINAL_EXAM", "CASE_STUDY"].includes(activity.type)) return attempt;
+    const answers = attempt.response?.answers ?? [];
+    return {
+      ...attempt,
+      feedback: (activity.content?.questions ?? []).map((question, index) => ({
+        selectedIndex: answers[index],
+        correct: answers[index] === question.correctIndex
+      }))
+    };
+  });
 
+  return { ...activity, content, ...(attempts ? { attempts } : {}) };
+}

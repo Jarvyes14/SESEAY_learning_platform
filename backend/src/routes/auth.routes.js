@@ -36,6 +36,73 @@ const recoveryLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "Too many recovery attempts. Try again later." }
 });
+const registrationLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { error: "Too many registration attempts. Try again later." }
+});
+
+router.post(
+  "/register",
+  registrationLimiter,
+  validate(
+    z.object({
+      email: z.string().trim().email().transform((value) => value.toLowerCase()),
+      firstName: z.string().trim().min(2).max(80),
+      lastName: z.string().trim().min(2).max(80),
+      password: z.string().min(1).max(72)
+    })
+  ),
+  asyncHandler(async (req, res) => {
+    const settings = await getPlatformSettings();
+    assertPasswordPolicy(req.body.password, settings);
+
+    const user = await prisma.$transaction(async (transaction) => {
+      const authorization = await transaction.authorizedEmail.findUnique({
+        where: { email: req.body.email },
+        include: { role: true, organization: true }
+      });
+
+      if (!authorization) {
+        throw new HttpError(403, "This email is not authorized to create an account");
+      }
+      if (authorization.registeredAt) {
+        throw new HttpError(409, "An account has already been created with this email");
+      }
+
+      const existingUser = await transaction.user.findUnique({
+        where: { email: req.body.email },
+        select: { id: true }
+      });
+      if (existingUser) {
+        throw new HttpError(409, "An account with this email already exists");
+      }
+
+      const createdUser = await transaction.user.create({
+        data: {
+          email: req.body.email,
+          passwordHash: await bcrypt.hash(req.body.password, 12),
+          firstName: req.body.firstName,
+          lastName: req.body.lastName,
+          roleId: authorization.roleId,
+          organizationId: authorization.organizationId,
+          mustChangePassword: false
+        },
+        include: { role: true, organization: true }
+      });
+
+      await transaction.authorizedEmail.update({
+        where: { id: authorization.id },
+        data: { registeredAt: new Date() }
+      });
+      return createdUser;
+    });
+
+    res.status(201).json({ data: publicUser(user) });
+  })
+);
 
 router.post(
   "/login",
@@ -296,11 +363,5 @@ router.delete(
     res.json({ revokedCurrent });
   })
 );
-
-router.post("/register", (_req, res) => {
-  res.status(403).json({
-    error: "Public registration is disabled. A platform administrator must create the account."
-  });
-});
 
 export default router;

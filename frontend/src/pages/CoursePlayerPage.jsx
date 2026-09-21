@@ -5,6 +5,10 @@ import {
   ClipboardCheck,
   FileQuestion,
   FileText,
+  ExternalLink,
+  ArrowDown,
+  ArrowRight,
+  ArrowUp,
   Lock,
   PlayCircle,
   Send
@@ -39,6 +43,10 @@ export default function CoursePlayerPage() {
     [data]
   );
   const selected = activities.find((activity) => activity.id === selectedId);
+  const selectedIndex = activities.findIndex((activity) => activity.id === selectedId);
+  const nextActivity = selectedIndex >= 0
+    ? activities.slice(selectedIndex + 1).find((activity) => activity.progress?.status !== "LOCKED")
+    : null;
 
   useEffect(() => {
     if (selected && selected.progress?.status === "AVAILABLE") {
@@ -51,10 +59,10 @@ export default function CoursePlayerPage() {
   }
 
   return (
-    <div className="grid min-h-[calc(100vh-65px)] lg:grid-cols-[330px_1fr]">
-      <aside className="border-r border-border bg-surface">
+    <div className="grid min-h-[calc(100vh-65px)] min-w-0 lg:grid-cols-[330px_minmax(0,1fr)]">
+      <aside className="min-w-0 border-r border-border bg-surface">
         <div className="border-b border-border p-5">
-          <Link to="/student" className="text-xs font-semibold text-primary">← My courses</Link>
+          <Link to="/learning" className="text-xs font-semibold text-primary">← My courses</Link>
           <h1 className="mt-2 font-bold">{data.enrollment.course.title}</h1>
           <div className="mt-4"><ProgressBar value={data.enrollment.courseProgress?.completionPercent ?? 0} label="Course progress" compact /></div>
         </div>
@@ -77,7 +85,7 @@ export default function CoursePlayerPage() {
                         } disabled:cursor-not-allowed disabled:opacity-50`}
                       >
                         <ProgressIcon status={activity.progress?.status} />
-                        {activity.title}
+                        <span className="min-w-0 break-words">{activity.title}</span>
                       </button>
                     ))}
                   </div>
@@ -87,16 +95,21 @@ export default function CoursePlayerPage() {
           ))}
         </div>
       </aside>
-      <main className="mx-auto w-full max-w-5xl p-7 lg:p-10">
+      <main className="mx-auto min-w-0 w-full max-w-5xl overflow-hidden p-5 sm:p-7 lg:p-10">
         {error && <p className="mb-5 rounded-md border border-error bg-error/10 p-4 text-sm text-error">{error}</p>}
         {selected ? (
           <>
             <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border pb-6">
-              <div><p className="eyebrow">{selected.type.replaceAll("_", " ")}</p><h2 className="mt-2 font-display text-3xl font-bold">{selected.title}</h2><p className="mt-3 text-text-secondary">{selected.instructions || "Complete this activity to unlock the next step."}</p></div>
+              <div className="min-w-0 flex-1 break-words"><p className="eyebrow">{selected.type.replaceAll("_", " ")}</p><h2 className="mt-2 font-display text-3xl font-bold">{selected.title}</h2><p className="mt-3 text-text-secondary">{selected.instructions || "Complete this activity to unlock the next step."}</p></div>
               <StatusBadge value={selected.progress?.status} />
             </div>
             <div className="mt-7">
-              <ActivityView activity={selected} onComplete={load} onError={setError} />
+              <ActivityView
+                activity={selected}
+                onComplete={load}
+                onError={setError}
+                onNext={nextActivity ? () => setSelectedId(nextActivity.id) : null}
+              />
             </div>
           </>
         ) : (
@@ -113,31 +126,26 @@ function ProgressIcon({ status }) {
   return <Circle size={14} />;
 }
 
-function ActivityView({ activity, onComplete, onError }) {
+function ActivityView({ activity, onComplete, onError, onNext }) {
   if (activity.progress?.status === "COMPLETED") {
-    const canRetry =
-      ["QUESTIONS", "FINAL_EXAM", "INCORRECT_SECTION"].includes(activity.type) &&
-      (!activity.maxAttempts || activity.attempts.length < activity.maxAttempts);
     return (
-      <div>
+      <div className="min-w-0">
         <div className="rounded-lg border border-success bg-success/10 p-6 text-success">
           <CheckCircle2 className="inline" /> <strong className="ml-2">Activity completed.</strong>
-          {activity.attempts?.[0]?.score !== null && (
+          {activity.attempts?.[0]?.score != null && (
             <span className="ml-2">
               Latest score: {activity.attempts[0].score}/{activity.attempts[0].maxScore}.
             </span>
           )}
         </div>
-        {canRetry && (
-          <div className="mt-6">
-            <h3 className="mb-4 font-bold">Optional retry ({activity.attempts.length}/{activity.maxAttempts ?? "unlimited"} attempts used)</h3>
-            {["QUESTIONS", "FINAL_EXAM"].includes(activity.type) ? (
-              <QuestionActivity activity={activity} onComplete={onComplete} onError={onError} />
-            ) : (
-              <IncorrectSectionActivity activity={activity} onComplete={onComplete} onError={onError} />
-            )}
-          </div>
+        {onNext && (
+          <button type="button" className="btn-primary mt-5" onClick={onNext}>
+            Next activity <ArrowRight size={16} />
+          </button>
         )}
+        <div className="mt-6">
+          <CompletedActivityReview activity={activity} />
+        </div>
       </div>
     );
   }
@@ -146,9 +154,76 @@ function ActivityView({ activity, onComplete, onError }) {
   }
   if (activity.type === "READING") return <ReadingActivity activity={activity} onComplete={onComplete} onError={onError} />;
   if (activity.type === "YOUTUBE_VIDEO") return <VideoActivity activity={activity} onComplete={onComplete} onError={onError} />;
-  if (["QUESTIONS", "FINAL_EXAM"].includes(activity.type)) return <QuestionActivity activity={activity} onComplete={onComplete} onError={onError} />;
-  if (activity.type === "INCORRECT_SECTION") return <IncorrectSectionActivity activity={activity} onComplete={onComplete} onError={onError} />;
+  if (["EXTERNAL_LINK", "EMBEDDED_CONTENT", "INTERACTIVE_CONTENT"].includes(activity.type)) return <ContentActivity activity={activity} onComplete={onComplete} onError={onError} />;
+  if (["QUESTIONS", "FINAL_EXAM", "INCORRECT_SECTION", "CASE_STUDY", "TRUE_FALSE", "MATCHING", "ORDERING", "FILL_BLANKS"].includes(activity.type)) return <GradedActivity activity={activity} onComplete={onComplete} onError={onError} />;
   if (activity.type === "ASSIGNMENT") return <AssignmentActivity activity={activity} onComplete={onComplete} onError={onError} />;
+  return null;
+}
+
+function CompletedActivityReview({ activity }) {
+  const content = activity.content ?? {};
+  const latestAttempt = activity.attempts?.[0];
+
+  if (activity.type === "READING") {
+    return <div className="panel p-7"><BookOpen className="text-primary" /><h3 className="mt-4 text-lg font-bold">Activity content</h3><div className="prose mt-4 max-w-none whitespace-pre-wrap leading-8 text-text-primary">{content.body}</div></div>;
+  }
+  if (activity.type === "YOUTUBE_VIDEO") {
+    const embedUrl = content.url.replace("watch?v=", "embed/").replace("youtu.be/", "youtube.com/embed/");
+    return <div className="aspect-video overflow-hidden rounded-lg border border-border bg-overlay"><iframe className="size-full" src={embedUrl} title={activity.title} allowFullScreen /></div>;
+  }
+  if (activity.type === "EXTERNAL_LINK") {
+    return <div className="panel p-6"><h3 className="font-bold">{content.label}</h3><p className="mt-2 text-sm text-text-secondary">{content.description}</p><a className="btn-secondary mt-4" href={content.url} target="_blank" rel="noreferrer"><ExternalLink size={16} /> Open external resource</a></div>;
+  }
+  if (activity.type === "EMBEDDED_CONTENT") {
+    return <div className="overflow-hidden rounded-lg border border-border bg-surface" style={{ height: content.height }}><iframe className="size-full" src={content.url} title={content.title} sandbox="allow-scripts allow-same-origin allow-forms allow-popups" /></div>;
+  }
+  if (activity.type === "INTERACTIVE_CONTENT") {
+    return <div className="grid gap-4 md:grid-cols-2">{content.items.map((item, index) => <article key={index} className="panel p-5"><h3 className="font-bold">{item.title}</h3><p className="mt-3 whitespace-pre-wrap leading-7 text-text-secondary">{item.body}</p></article>)}</div>;
+  }
+  if (["QUESTIONS", "FINAL_EXAM", "CASE_STUDY"].includes(activity.type)) {
+    return <div className="min-w-0 space-y-4">{activity.type === "CASE_STUDY" && <div className="panel min-w-0 border-l-4 border-l-primary p-6"><p className="eyebrow">Scenario</p><p className="mt-3 whitespace-pre-wrap break-words leading-7">{content.scenario}</p></div>}{content.questions.map((question, index) => {
+      const result = latestAttempt?.feedback?.[index];
+      return <div key={index} className="panel min-w-0 overflow-hidden p-5"><h3 className="break-words font-bold">{index + 1}. {question.prompt}</h3><ul className="mt-3 min-w-0 space-y-2 text-sm">{question.options.map((option, optionIndex) => {
+        const isSelected = result?.selectedIndex === optionIndex;
+        const stateClass = isSelected
+          ? result.correct
+            ? "border-success bg-success/10 font-semibold text-success"
+            : "border-error bg-error/10 font-semibold text-error"
+          : "border-border text-text-secondary";
+        return <li key={optionIndex} className={`min-w-0 break-words rounded-md border p-3 ${stateClass}`}>{option}</li>;
+      })}</ul>{result && <p className={`mt-3 text-sm font-semibold ${result.correct ? "text-success" : "text-error"}`}>{result.correct ? "Correct answer" : "Incorrect answer"}</p>}</div>;
+    })}{latestAttempt?.score != null && <div className="rounded-lg border border-border bg-surface-muted p-5 text-sm"><span className="font-semibold">Result:</span> {latestAttempt.score}/{latestAttempt.maxScore} points</div>}</div>;
+  }
+  if (activity.type === "TRUE_FALSE") {
+    return <div className="space-y-3">{content.statements.map((statement, index) => <div key={index} className="panel p-5 font-semibold">{index + 1}. {statement.prompt}</div>)}</div>;
+  }
+  if (activity.type === "MATCHING") {
+    return <div className="panel grid gap-5 p-6 md:grid-cols-2"><div><h3 className="font-bold">Concepts</h3>{content.leftItems.map((item) => <p key={item.id} className="mt-2 rounded-md border border-border p-3 text-sm">{item.text}</p>)}</div><div><h3 className="font-bold">Possible matches</h3>{content.rightItems.map((item) => <p key={item.id} className="mt-2 rounded-md border border-border p-3 text-sm">{item.text}</p>)}</div></div>;
+  }
+  if (activity.type === "ORDERING") {
+    return <div className="space-y-2">{content.displayItems.map((item, index) => <div key={item.id} className="panel flex items-center gap-3 p-4"><span className="grid size-8 place-items-center rounded-full bg-primary/10 text-sm font-bold text-primary">{index + 1}</span><span className="text-sm font-semibold">{item.text}</span></div>)}</div>;
+  }
+  if (activity.type === "FILL_BLANKS") {
+    return <div className="panel space-y-4 p-6">{content.sentences.map((sentence, index) => <p key={index} className="font-semibold">{index + 1}. {sentence.prompt}</p>)}</div>;
+  }
+  if (activity.type === "INCORRECT_SECTION") {
+    return <div className="space-y-3">{content.sections.map((section, index) => <p key={index} className="panel p-4 text-sm leading-6">{section.text}</p>)}</div>;
+  }
+  if (activity.type === "ASSIGNMENT") {
+    return <div className="panel p-6"><h3 className="font-bold">Assignment fields</h3><ul className="mt-3 space-y-2 text-sm text-text-secondary">{content.fields.map((field, index) => <li key={index} className="rounded-md border border-border p-3">{field.label}</li>)}</ul></div>;
+  }
+  return null;
+}
+
+function GradedActivity({ activity, onComplete, onError }) {
+  if (["QUESTIONS", "FINAL_EXAM", "CASE_STUDY"].includes(activity.type)) {
+    return <QuestionActivity activity={activity} onComplete={onComplete} onError={onError} />;
+  }
+  if (activity.type === "INCORRECT_SECTION") return <IncorrectSectionActivity activity={activity} onComplete={onComplete} onError={onError} />;
+  if (activity.type === "TRUE_FALSE") return <TrueFalseActivity activity={activity} onComplete={onComplete} onError={onError} />;
+  if (activity.type === "MATCHING") return <MatchingActivity activity={activity} onComplete={onComplete} onError={onError} />;
+  if (activity.type === "ORDERING") return <OrderingActivity activity={activity} onComplete={onComplete} onError={onError} />;
+  if (activity.type === "FILL_BLANKS") return <FillBlanksActivity activity={activity} onComplete={onComplete} onError={onError} />;
   return null;
 }
 
@@ -198,7 +273,82 @@ function QuestionActivity({ activity, onComplete, onError }) {
       onComplete();
     } catch (requestError) { onError(requestError.message); }
   }
-  return <form onSubmit={submit} className="space-y-5">{activity.content.questions.map((question, questionIndex) => <fieldset key={questionIndex} className="panel p-6"><legend className="font-bold">{questionIndex + 1}. {question.prompt}</legend><div className="mt-4 space-y-2">{question.options.map((option, optionIndex) => <label key={optionIndex} className="flex cursor-pointer gap-3 rounded-md border border-border p-3 text-sm"><input type="radio" name={`question-${questionIndex}`} checked={answers[questionIndex] === optionIndex} onChange={() => setAnswers(answers.map((answer, index) => index === questionIndex ? optionIndex : answer))} className="accent-primary" required /> {option}</label>)}</div></fieldset>)}<button className="btn-primary" type="submit"><Send size={16} /> Submit {activity.type === "FINAL_EXAM" ? "final exam" : "answers"}</button></form>;
+  return <form onSubmit={submit} className="space-y-5">{activity.type === "CASE_STUDY" && <div className="panel border-l-4 border-l-primary p-6"><p className="eyebrow">Scenario</p><p className="mt-3 whitespace-pre-wrap leading-7">{activity.content.scenario}</p></div>}{activity.content.questions.map((question, questionIndex) => <fieldset key={questionIndex} className="panel p-6"><legend className="font-bold">{questionIndex + 1}. {question.prompt}</legend><div className="mt-4 space-y-2">{question.options.map((option, optionIndex) => <label key={optionIndex} className="flex cursor-pointer gap-3 rounded-md border border-border p-3 text-sm"><input type="radio" name={`question-${questionIndex}`} checked={answers[questionIndex] === optionIndex} onChange={() => setAnswers(answers.map((answer, index) => index === questionIndex ? optionIndex : answer))} className="accent-primary" required /> {option}</label>)}</div></fieldset>)}<button className="btn-primary" type="submit"><Send size={16} /> Submit {activity.type === "FINAL_EXAM" ? "final exam" : "answers"}</button></form>;
+}
+
+function ContentActivity({ activity, onComplete, onError }) {
+  const [activeItem, setActiveItem] = useState(0);
+  async function complete() {
+    try {
+      await api(`/progress/activities/${activity.id}/content`, { method: "POST", body: JSON.stringify({ confirmed: true }) });
+      onComplete();
+    } catch (requestError) { onError(requestError.message); }
+  }
+
+  if (activity.type === "EXTERNAL_LINK") {
+    return <div className="panel p-7"><ExternalLink className="text-primary" /><h3 className="mt-4 text-xl font-bold">{activity.content.label}</h3><p className="mt-2 text-text-secondary">{activity.content.description}</p><a className="btn-secondary mt-5" href={activity.content.url} target="_blank" rel="noreferrer"><ExternalLink size={16} /> Open external resource</a><div className="mt-6 border-t border-border pt-5"><button type="button" className="btn-primary" onClick={complete}><CheckCircle2 size={16} /> Mark resource as reviewed</button></div></div>;
+  }
+
+  if (activity.type === "EMBEDDED_CONTENT") {
+    return <div><div className="overflow-hidden rounded-lg border border-border bg-surface" style={{ height: activity.content.height }}><iframe className="size-full" src={activity.content.url} title={activity.content.title} sandbox="allow-scripts allow-same-origin allow-forms allow-popups" /></div><button type="button" className="btn-primary mt-5" onClick={complete}><CheckCircle2 size={16} /> Mark embedded content as reviewed</button></div>;
+  }
+
+  const { layout, items } = activity.content;
+  return <div><div className={layout === "CARDS" ? "grid gap-4 md:grid-cols-2" : "space-y-3"}>{layout === "ACCORDION" && items.map((item, index) => <details key={index} className="panel p-5" open={index === 0}><summary className="cursor-pointer font-bold">{item.title}</summary><p className="mt-3 whitespace-pre-wrap leading-7 text-text-secondary">{item.body}</p></details>)}{layout === "CARDS" && items.map((item, index) => <article key={index} className="panel p-5"><h3 className="font-bold">{item.title}</h3><p className="mt-3 whitespace-pre-wrap leading-7 text-text-secondary">{item.body}</p></article>)}{layout === "TABS" && <div className="panel overflow-hidden"><div className="flex flex-wrap border-b border-border bg-surface-muted">{items.map((item, index) => <button key={index} type="button" className={`px-5 py-3 text-sm font-semibold ${activeItem === index ? "bg-surface text-primary" : "text-text-secondary"}`} onClick={() => setActiveItem(index)}>{item.title}</button>)}</div><div className="p-6 whitespace-pre-wrap leading-7">{items[activeItem]?.body}</div></div>}</div><button type="button" className="btn-primary mt-5" onClick={complete}><CheckCircle2 size={16} /> Complete interactive content</button></div>;
+}
+
+function TrueFalseActivity({ activity, onComplete, onError }) {
+  const [answers, setAnswers] = useState(Array(activity.content.statements.length).fill(null));
+  async function submit(event) {
+    event.preventDefault();
+    try {
+      await api(`/progress/activities/${activity.id}/attempts`, { method: "POST", body: JSON.stringify({ response: { answers } }) });
+      onComplete();
+    } catch (requestError) { onError(requestError.message); }
+  }
+  return <form onSubmit={submit} className="space-y-4">{activity.content.statements.map((statement, index) => <fieldset key={index} className="panel p-5"><legend className="font-bold">{index + 1}. {statement.prompt}</legend><div className="mt-4 flex gap-3">{[true, false].map((answer) => <label key={String(answer)} className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-4 py-3 text-sm"><input type="radio" name={`statement-${index}`} checked={answers[index] === answer} onChange={() => setAnswers(answers.map((value, position) => position === index ? answer : value))} required /> {answer ? "True" : "False"}</label>)}</div></fieldset>)}<button className="btn-primary" type="submit"><Send size={16} /> Submit answers</button></form>;
+}
+
+function MatchingActivity({ activity, onComplete, onError }) {
+  const [matches, setMatches] = useState(Array(activity.content.leftItems.length).fill(null));
+  async function submit(event) {
+    event.preventDefault();
+    try {
+      await api(`/progress/activities/${activity.id}/attempts`, { method: "POST", body: JSON.stringify({ response: { matches } }) });
+      onComplete();
+    } catch (requestError) { onError(requestError.message); }
+  }
+  return <form onSubmit={submit} className="panel space-y-4 p-6">{activity.content.leftItems.map((item, index) => <label key={item.id} className="grid items-center gap-3 md:grid-cols-2"><span className="font-semibold">{item.text}</span><select className="input-field" value={matches[index] ?? ""} onChange={(event) => setMatches(matches.map((value, position) => position === index ? Number(event.target.value) : value))} required><option value="">Select the matching concept</option>{activity.content.rightItems.map((option) => <option key={option.id} value={option.id}>{option.text}</option>)}</select></label>)}<button className="btn-primary" type="submit"><Send size={16} /> Submit matches</button></form>;
+}
+
+function OrderingActivity({ activity, onComplete, onError }) {
+  const [items, setItems] = useState(activity.content.displayItems);
+  function move(index, direction) {
+    const target = index + direction;
+    if (target < 0 || target >= items.length) return;
+    const next = [...items];
+    [next[index], next[target]] = [next[target], next[index]];
+    setItems(next);
+  }
+  async function submit() {
+    try {
+      await api(`/progress/activities/${activity.id}/attempts`, { method: "POST", body: JSON.stringify({ response: { order: items.map((item) => item.id) } }) });
+      onComplete();
+    } catch (requestError) { onError(requestError.message); }
+  }
+  return <div className="space-y-3">{items.map((item, index) => <div key={item.id} className="panel flex items-center gap-3 p-4"><span className="grid size-8 place-items-center rounded-full bg-primary/10 text-sm font-bold text-primary">{index + 1}</span><span className="flex-1 text-sm font-semibold">{item.text}</span><button type="button" className="rounded-md border border-border p-2 disabled:opacity-30" onClick={() => move(index, -1)} disabled={index === 0}><ArrowUp size={15} /></button><button type="button" className="rounded-md border border-border p-2 disabled:opacity-30" onClick={() => move(index, 1)} disabled={index === items.length - 1}><ArrowDown size={15} /></button></div>)}<button type="button" className="btn-primary" onClick={submit}><Send size={16} /> Submit order</button></div>;
+}
+
+function FillBlanksActivity({ activity, onComplete, onError }) {
+  const [answers, setAnswers] = useState(Array(activity.content.sentences.length).fill(""));
+  async function submit(event) {
+    event.preventDefault();
+    try {
+      await api(`/progress/activities/${activity.id}/attempts`, { method: "POST", body: JSON.stringify({ response: { answers } }) });
+      onComplete();
+    } catch (requestError) { onError(requestError.message); }
+  }
+  return <form onSubmit={submit} className="panel space-y-5 p-6">{activity.content.sentences.map((sentence, index) => <label key={index} className="block"><span className="mb-2 block font-semibold">{index + 1}. {sentence.prompt}</span><input className="input-field" value={answers[index]} onChange={(event) => setAnswers(answers.map((value, position) => position === index ? event.target.value : value))} required /></label>)}<button className="btn-primary" type="submit"><Send size={16} /> Submit answers</button></form>;
 }
 
 function IncorrectSectionActivity({ activity, onComplete, onError }) {

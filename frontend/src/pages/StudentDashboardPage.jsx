@@ -15,8 +15,8 @@ export default function StudentDashboardPage() {
   const load = useCallback(async () => {
     try {
       const [courseResult, enrollmentResult] = await Promise.all([
-        api("/courses?limit=100"),
-        api("/enrollments")
+        api("/courses/catalog?limit=100"),
+        api("/enrollments?mine=true")
       ]);
       setCourses(courseResult.data);
       setEnrollments(enrollmentResult.data);
@@ -44,9 +44,9 @@ export default function StudentDashboardPage() {
   return (
     <div className="container-page py-10">
       <PageHeading
-        eyebrow="Student workspace"
+        eyebrow="Learning workspace"
         title="My learning"
-        description="Only published database courses appear here. Activities unlock in the sequence defined by the instructor."
+        description="Published courses assigned to your role, organization, or account appear here. Activities unlock in the sequence defined by the instructor."
       />
       {error && <p className="mt-5 rounded-md border border-error bg-error/10 p-4 text-sm text-error">{error}</p>}
 
@@ -62,7 +62,7 @@ export default function StudentDashboardPage() {
                 <div className="mt-5">
                   <ProgressBar value={enrollment.courseProgress?.completionPercent ?? 0} label="Course completion" />
                 </div>
-                <Link to={`/courses/${enrollment.courseId}/class`} className="btn-primary mt-5 w-full"><Play size={16} /> Continue class</Link>
+                <Link to={`/courses/${enrollment.courseId}/class`} className="btn-primary mt-5 w-full"><Play size={16} /> Continue course</Link>
               </article>
             ))}
           </div>
@@ -99,4 +99,3 @@ export default function StudentDashboardPage() {
     </div>
   );
 }
-

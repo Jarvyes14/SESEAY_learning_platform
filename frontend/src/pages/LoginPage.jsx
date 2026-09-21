@@ -5,7 +5,7 @@ import Logo from "../components/Logo.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 
 function homeForRole(role) {
-  if (role === "student") return "/student";
+  if (role === "student") return "/learning";
   if (role === "instructor") return "/instructor";
   return "/admin";
 }
@@ -41,8 +41,9 @@ export default function LoginPage() {
           <p className="eyebrow">Secure platform access</p>
           <h1 className="mt-3 font-display text-4xl font-bold">Sign in</h1>
           <p className="mt-3 text-text-secondary">
-            Accounts are created by authorized administrators. Public registration is disabled.
+            Sign in with your account, or create one using an email previously authorized by an administrator.
           </p>
+          {location.state?.accountCreated && <p className="mt-5 rounded-md border border-success bg-success/10 p-3 text-sm text-success">Your account was created. You can now sign in.</p>}
           {location.state?.passwordReset && <p className="mt-5 rounded-md border border-success bg-success/10 p-3 text-sm text-success">Your password was updated. You can now sign in.</p>}
           <label className="mt-8 block">
             <span className="mb-2 block text-sm font-semibold">Email</span>
@@ -57,6 +58,9 @@ export default function LoginPage() {
           <button type="submit" className="btn-primary mt-6 w-full" disabled={submitting}>
             {submitting ? "Signing in..." : "Sign in"} <ArrowRight size={17} />
           </button>
+          <p className="mt-5 text-center text-sm text-text-secondary">
+            Have an authorized email? <Link className="font-semibold text-primary" to="/register">Create an account</Link>
+          </p>
         </form>
       </section>
       <aside className="hidden items-center bg-primary p-12 text-inverse lg:flex">

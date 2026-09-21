@@ -1,5 +1,5 @@
-import { Building2, MailPlus, Pencil, Plus, Power, Trash2, UserPlus, X } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { Building2, ChevronDown, ChevronUp, Clock3, MailCheck, Pencil, Plus, Power, Trash2, X } from "lucide-react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import DisabledButton from "../components/DisabledButton.jsx";
 import EmptyState from "../components/EmptyState.jsx";
 import PageHeading from "../components/PageHeading.jsx";
@@ -7,13 +7,16 @@ import StatusBadge from "../components/StatusBadge.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { api } from "../lib/api.js";
 
-const initialUser = {
-  firstName: "",
-  lastName: "",
+const initialAuthorization = {
   email: "",
   role: "student",
   organizationId: ""
 };
+
+const accessDateFormatter = new Intl.DateTimeFormat("es-MX", {
+  dateStyle: "medium",
+  timeStyle: "short"
+});
 
 function userToForm(user) {
   return {
@@ -29,26 +32,30 @@ function userToForm(user) {
 export default function UsersPage() {
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState([]);
+  const [authorizedEmails, setAuthorizedEmails] = useState([]);
   const [roles, setRoles] = useState([]);
   const [organizations, setOrganizations] = useState([]);
-  const [form, setForm] = useState(initialUser);
+  const [form, setForm] = useState(initialAuthorization);
   const [organizationForm, setOrganizationForm] = useState({ name: "", institutionName: "", slug: "" });
-  const [showUserForm, setShowUserForm] = useState(false);
+  const [showAuthorizationForm, setShowAuthorizationForm] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [editForm, setEditForm] = useState(null);
   const [showOrganizationForm, setShowOrganizationForm] = useState(false);
+  const [expandedUserId, setExpandedUserId] = useState("");
   const [submitting, setSubmitting] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
     try {
-      const [userResult, roleResult, organizationResult] = await Promise.all([
+      const [userResult, authorizationResult, roleResult, organizationResult] = await Promise.all([
         api("/users?limit=100"),
+        api("/users/authorized-emails"),
         api("/users/roles"),
         api("/organizations")
       ]);
       setUsers(userResult.data);
+      setAuthorizedEmails(authorizationResult.data);
       setRoles(roleResult.data);
       setOrganizations(organizationResult.data);
       setForm((current) =>
@@ -64,24 +71,23 @@ export default function UsersPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  async function createUser(event) {
+  async function authorizeEmail(event) {
     event.preventDefault();
     setError("");
     setMessage("");
-    setSubmitting("user");
+    setSubmitting("authorization");
     try {
-      const result = await api("/users", {
+      await api("/users/authorized-emails", {
         method: "POST",
         body: JSON.stringify({
-          ...form,
+          email: form.email,
+          role: form.role,
           organizationId: form.organizationId || null
         })
       });
-      setMessage(result.invitation?.sent
-        ? "User created and invitation email sent."
-        : `User created, but the invitation was not sent: ${result.invitation?.reason ?? "email is not configured"}.`);
-      setForm(initialUser);
-      setShowUserForm(false);
+      setMessage(`${form.email} can now create an account.`);
+      setForm(initialAuthorization);
+      setShowAuthorizationForm(false);
       await load();
     } catch (requestError) {
       setError(requestError.message);
@@ -129,16 +135,14 @@ export default function UsersPage() {
     }
   }
 
-  async function inviteUser(target) {
-    if (!window.confirm(`Generate a new temporary password and send an invitation to ${target.email}?`)) return;
+  async function removeAuthorization(target) {
+    if (!window.confirm(`Remove registration authorization for ${target.email}?`)) return;
     setError("");
     setMessage("");
     setSubmitting(target.id);
     try {
-      const result = await api(`/users/${target.id}/invite`, { method: "POST" });
-      setMessage(result.invitation?.sent
-        ? `A new invitation was sent to ${target.email}.`
-        : `The temporary credential was generated, but the email was not sent: ${result.invitation?.reason ?? "email is not configured"}.`);
+      await api(`/users/authorized-emails/${target.id}`, { method: "DELETE" });
+      setMessage(`Registration authorization removed for ${target.email}.`);
       await load();
     } catch (requestError) {
       setError(requestError.message);
@@ -150,7 +154,7 @@ export default function UsersPage() {
   function beginEdit(target) {
     setEditingUser(target);
     setEditForm(userToForm(target));
-    setShowUserForm(false);
+    setShowAuthorizationForm(false);
     setError("");
     setMessage("");
   }
@@ -208,8 +212,8 @@ export default function UsersPage() {
     <div className="container-page py-10">
       <PageHeading
         eyebrow="Identity and access"
-        title="Users and organizations"
-        description="Every row shown here comes from the database. Create accounts before assigning courses or enrolling students."
+        title="Authorized emails and users"
+        description="Authorize email addresses here. Each person then creates their own account and chooses their own password."
         actions={
           <>
             <DisabledButton>Bulk CSV import</DisabledButton>
@@ -218,8 +222,8 @@ export default function UsersPage() {
                 <Building2 size={16} /> New organization
               </button>
             )}
-            <button type="button" className="btn-primary" onClick={() => setShowUserForm((value) => !value)}>
-              <UserPlus size={16} /> New user
+            <button type="button" className="btn-primary" onClick={() => setShowAuthorizationForm((value) => !value)}>
+              <MailCheck size={16} /> Authorize email
             </button>
           </>
         }
@@ -238,10 +242,8 @@ export default function UsersPage() {
         </form>
       )}
 
-      {showUserForm && (
-        <form onSubmit={createUser} className="panel mt-6 grid gap-4 p-6 md:grid-cols-2">
-          <FormField label="First name" value={form.firstName} onChange={(value) => setForm({ ...form, firstName: value })} />
-          <FormField label="Last name" value={form.lastName} onChange={(value) => setForm({ ...form, lastName: value })} />
+      {showAuthorizationForm && (
+        <form onSubmit={authorizeEmail} className="panel mt-6 grid gap-4 p-6 md:grid-cols-2">
           <FormField label="Email" type="email" value={form.email} onChange={(value) => setForm({ ...form, email: value })} />
           <label>
             <span className="mb-2 block text-sm font-semibold">Role</span>
@@ -268,9 +270,9 @@ export default function UsersPage() {
               </select>
             </label>
           )}
-          <p className="text-xs text-text-secondary md:col-span-2">A secure temporary password will be generated automatically and sent to the user's email. They must replace it on first sign-in.</p>
+          <p className="text-xs text-text-secondary md:col-span-2">This does not create an account. The person must use this exact email on the Create account page and choose their own password.</p>
           <button className="btn-primary md:col-span-2" type="submit" disabled={submitting !== "" || !roles.length}>
-            <UserPlus size={16} /> {submitting === "user" ? "Creating…" : "Create user"}
+            <MailCheck size={16} /> {submitting === "authorization" ? "Authorizing…" : "Authorize email"}
           </button>
         </form>
       )}
@@ -343,6 +345,46 @@ export default function UsersPage() {
       )}
 
       <section className="mt-8">
+        <h2 className="text-xl font-bold">Authorized emails ({authorizedEmails.length})</h2>
+        {authorizedEmails.length ? (
+          <div className="mt-4 overflow-x-auto rounded-lg border border-border bg-surface">
+            <table className="w-full min-w-3xl text-left text-sm">
+              <thead className="bg-surface-muted text-xs uppercase text-text-secondary">
+                <tr><th className="px-5 py-4">Email</th><th className="px-5 py-4">Role</th><th className="px-5 py-4">Organization</th><th className="px-5 py-4">Registration</th><th className="px-5 py-4">Actions</th></tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {authorizedEmails.map((entry) => (
+                  <tr key={entry.id}>
+                    <td className="px-5 py-4 font-semibold">{entry.email}</td>
+                    <td className="px-5 py-4 capitalize">{entry.role.replaceAll("_", " ")}</td>
+                    <td className="px-5 py-4 text-text-secondary">{entry.organization?.name ?? "None"}</td>
+                    <td className="px-5 py-4">
+                      <span className={entry.registeredAt ? "text-success" : "text-warning"}>
+                        {entry.registeredAt ? "Account created" : "Pending"}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4">
+                      <button
+                        type="button"
+                        className="rounded-md border border-border p-2 text-text-secondary hover:text-error disabled:opacity-60"
+                        onClick={() => removeAuthorization(entry)}
+                        title="Remove registration authorization"
+                        disabled={submitting !== ""}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="mt-4"><EmptyState title="No authorized emails" description="Authorize an email so its owner can create an account." /></div>
+        )}
+      </section>
+
+      <section className="mt-9">
         <h2 className="text-xl font-bold">Organizations ({organizations.length})</h2>
         {organizations.length ? (
           <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -366,15 +408,33 @@ export default function UsersPage() {
           <div className="mt-4 overflow-x-auto rounded-lg border border-border bg-surface">
             <table className="w-full min-w-3xl text-left text-sm">
               <thead className="bg-surface-muted text-xs uppercase text-text-secondary">
-                <tr><th className="px-5 py-4">User</th><th className="px-5 py-4">Role</th><th className="px-5 py-4">Organization</th><th className="px-5 py-4">Status</th><th className="px-5 py-4">Actions</th></tr>
+                <tr><th className="px-5 py-4">User</th><th className="px-5 py-4">Role</th><th className="px-5 py-4">Organization</th><th className="px-5 py-4">Status</th><th className="px-5 py-4">Último acceso</th><th className="px-5 py-4">Actions</th></tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {users.map((target) => (
-                  <tr key={target.id}>
+                  <Fragment key={target.id}>
+                  <tr>
                     <td className="px-5 py-4"><strong>{target.firstName} {target.lastName}</strong><span className="block text-xs text-text-secondary">{target.email}</span></td>
                     <td className="px-5 py-4 capitalize">{target.role.replaceAll("_", " ")}</td>
                     <td className="px-5 py-4 text-text-secondary">{target.organization?.name ?? "None"}</td>
                     <td className="px-5 py-4"><StatusBadge value={target.isActive ? "ACTIVE" : "ARCHIVED"} /></td>
+                    <td className="px-5 py-4">
+                      {target.lastAccessAt ? (
+                        <div>
+                          <span className="block text-sm">{accessDateFormatter.format(new Date(target.lastAccessAt))}</span>
+                          <button
+                            type="button"
+                            className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-primary"
+                            onClick={() => setExpandedUserId((current) => current === target.id ? "" : target.id)}
+                          >
+                            {expandedUserId === target.id ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                            {expandedUserId === target.id ? "Ocultar historial" : "Ver últimos accesos"}
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-text-secondary">Nunca ha ingresado</span>
+                      )}
+                    </td>
                     <td className="px-5 py-4">
                       <div className="flex gap-2">
                         <button
@@ -386,17 +446,6 @@ export default function UsersPage() {
                         >
                           <Pencil size={16} />
                         </button>
-                        {currentUser.id !== target.id && (
-                          <button
-                            type="button"
-                            className="rounded-md border border-border p-2 text-text-secondary hover:text-primary disabled:opacity-60"
-                            onClick={() => inviteUser(target)}
-                            title="Generate temporary password and send invitation"
-                            disabled={submitting !== ""}
-                          >
-                            <MailPlus size={16} />
-                          </button>
-                        )}
                         {currentUser.id !== target.id && (
                           <button
                             type="button"
@@ -414,12 +463,29 @@ export default function UsersPage() {
                       </div>
                     </td>
                   </tr>
+                  {expandedUserId === target.id && (
+                    <tr className="bg-surface-muted/50">
+                      <td colSpan="6" className="px-5 py-4">
+                        <p className="mb-3 text-xs font-bold uppercase tracking-wide text-text-secondary">Últimos accesos registrados</p>
+                        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                          {target.recentAccesses.map((access) => (
+                            <div key={access.id} className="rounded-md border border-border bg-surface p-3">
+                              <p className="flex items-center gap-2 text-sm font-semibold"><Clock3 size={14} /> {accessDateFormatter.format(new Date(access.lastSeenAt))}</p>
+                              <p className="mt-1 text-xs text-text-secondary">Inicio: {accessDateFormatter.format(new Date(access.signedInAt))}</p>
+                              <p className="mt-1 text-xs text-text-secondary">IP: {access.ipAddress || "No disponible"}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
           </div>
         ) : (
-          <div className="mt-4"><EmptyState title="No users" description="Create the first instructor or student account to begin using the learning workflows." /></div>
+          <div className="mt-4"><EmptyState title="No users" description="Registered accounts will appear here after an authorized person creates one." /></div>
         )}
       </section>
     </div>

@@ -14,6 +14,14 @@ const router = Router();
 const activityTypes = [
   "YOUTUBE_VIDEO",
   "READING",
+  "EXTERNAL_LINK",
+  "EMBEDDED_CONTENT",
+  "CASE_STUDY",
+  "TRUE_FALSE",
+  "MATCHING",
+  "ORDERING",
+  "FILL_BLANKS",
+  "INTERACTIVE_CONTENT",
   "QUESTIONS",
   "INCORRECT_SECTION",
   "ASSIGNMENT",
@@ -38,6 +46,22 @@ function validateContent(type, content) {
       durationSeconds: z.number().positive()
     }),
     READING: z.object({ body: z.string().min(20) }),
+    EXTERNAL_LINK: z.object({
+      url: z.string().url(),
+      label: z.string().min(2).max(160),
+      description: z.string().max(1000).optional()
+    }),
+    EMBEDDED_CONTENT: z.object({
+      url: z.string().url(),
+      title: z.string().min(2).max(160),
+      height: z.number().int().min(240).max(1200).default(520)
+    }),
+    INTERACTIVE_CONTENT: z.object({
+      layout: z.enum(["ACCORDION", "TABS", "CARDS"]),
+      items: z.array(
+        z.object({ title: z.string().min(1).max(160), body: z.string().min(1).max(5000) })
+      ).min(2).max(30)
+    }),
     QUESTIONS: z.object({
       questions: z.array(
         z.object({
@@ -54,6 +78,42 @@ function validateContent(type, content) {
           prompt: z.string().min(3),
           options: z.array(z.string().min(1)).min(2),
           correctIndex: z.number().int().min(0),
+          points: z.number().positive().default(1)
+        })
+      ).min(1)
+    }),
+    CASE_STUDY: z.object({
+      scenario: z.string().min(20).max(10000),
+      questions: z.array(
+        z.object({
+          prompt: z.string().min(3),
+          options: z.array(z.string().min(1)).min(2),
+          correctIndex: z.number().int().min(0),
+          points: z.number().positive().default(1)
+        })
+      ).min(1)
+    }),
+    TRUE_FALSE: z.object({
+      statements: z.array(
+        z.object({
+          prompt: z.string().min(3),
+          correctAnswer: z.boolean(),
+          points: z.number().positive().default(1)
+        })
+      ).min(1)
+    }),
+    MATCHING: z.object({
+      pairs: z.array(
+        z.object({ left: z.string().min(1), right: z.string().min(1) })
+      ).min(2)
+    }),
+    ORDERING: z.object({ items: z.array(z.string().min(1)).min(2) }),
+    FILL_BLANKS: z.object({
+      sentences: z.array(
+        z.object({
+          prompt: z.string().min(3),
+          answer: z.string().min(1),
+          caseSensitive: z.boolean().default(false),
           points: z.number().positive().default(1)
         })
       ).min(1)

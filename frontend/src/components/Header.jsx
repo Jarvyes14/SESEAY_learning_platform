@@ -4,8 +4,8 @@ import {
   BookOpen,
   GraduationCap,
   LayoutDashboard,
+  LibraryBig,
   LogOut,
-  MonitorSmartphone,
   Settings,
   ShieldCheck,
   Users
@@ -17,33 +17,41 @@ import Logo from "./Logo.jsx";
 const linksByRole = {
   platform_admin: [
     ["Overview", "/admin", LayoutDashboard],
+    ["My learning", "/learning", LibraryBig],
     ["Users", "/admin/users", Users],
     ["Courses", "/instructor", BookOpen],
+    ["Progress", "/progress", BarChart3],
     ["Grades", "/grades", GraduationCap],
     ["Certificates", "/certificates", Award],
     ["Settings", "/admin/settings", Settings]
   ],
   government_admin: [
     ["Overview", "/admin", LayoutDashboard],
+    ["My learning", "/learning", LibraryBig],
     ["Users", "/admin/users", Users],
     ["Courses", "/instructor", BookOpen],
+    ["Progress", "/progress", BarChart3],
     ["Grades", "/grades", GraduationCap],
     ["Certificates", "/certificates", Award]
   ],
   organization_admin: [
     ["Overview", "/admin", LayoutDashboard],
+    ["My learning", "/learning", LibraryBig],
     ["Users", "/admin/users", Users],
+    ["Courses", "/instructor", BookOpen],
     ["Progress", "/progress", BarChart3],
     ["Grades", "/grades", GraduationCap],
     ["Certificates", "/certificates", Award]
   ],
   instructor: [
     ["Dashboard", "/instructor", LayoutDashboard],
+    ["My learning", "/learning", LibraryBig],
+    ["Progress", "/progress", BarChart3],
     ["Grades", "/grades", GraduationCap],
     ["Certificates", "/certificates", Award]
   ],
   student: [
-    ["My courses", "/student", BookOpen],
+    ["My courses", "/learning", BookOpen],
     ["Progress", "/progress", BarChart3],
     ["Grades", "/grades", GraduationCap],
     ["Certificates", "/certificates", Award]
@@ -53,7 +61,7 @@ const linksByRole = {
 export default function Header() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const links = [...(linksByRole[user?.role] ?? []), ["Sesiones", "/sessions", MonitorSmartphone]];
+  const links = linksByRole[user?.role] ?? [];
 
   async function handleLogout() {
     await logout();
@@ -69,6 +77,7 @@ export default function Header() {
             <NavLink
               key={href}
               to={href}
+              end={href === "/admin"}
               className={({ isActive }) =>
                 `flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold ${
                   isActive

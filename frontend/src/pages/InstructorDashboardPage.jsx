@@ -95,6 +95,13 @@ export default function InstructorDashboardPage() {
                 </div>
                 <h2 className="mt-4 text-xl font-bold">{course.title}</h2>
                 <p className="mt-2 line-clamp-3 text-sm leading-6 text-text-secondary">{course.description}</p>
+                <p className="mt-3 rounded-md bg-surface-muted px-3 py-2 text-xs text-text-secondary">
+                  Access: {course.accessType === "ROLE"
+                    ? `Role · ${course.accessRole?.displayName ?? "Not configured"}`
+                    : course.accessType === "ORGANIZATION"
+                      ? `Organization · ${course.accessOrganization?.name ?? "Not configured"}`
+                      : `${course._count.accessUsers} selected users`}
+                </p>
                 <dl className="mt-5 grid grid-cols-2 gap-3 text-xs text-text-secondary">
                   <div><dt>Blocks</dt><dd className="mt-1 font-bold text-text-primary">{course._count.blocks}</dd></div>
                   <div><dt>Enrollments</dt><dd className="mt-1 font-bold text-text-primary">{course._count.enrollments}</dd></div>
@@ -114,4 +121,3 @@ export default function InstructorDashboardPage() {
 function Field({ label, value, onChange, type = "text" }) {
   return <label><span className="mb-2 block text-sm font-semibold">{label}</span><input className="input-field" type={type} value={value} onChange={(event) => onChange(event.target.value)} required /></label>;
 }
-

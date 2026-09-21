@@ -19,9 +19,23 @@ enum CourseStatus {
   ARCHIVED
 }
 
+enum CourseAccessType {
+  ROLE
+  ORGANIZATION
+  USERS
+}
+
 enum ActivityType {
   YOUTUBE_VIDEO
   READING
+  EXTERNAL_LINK
+  EMBEDDED_CONTENT
+  CASE_STUDY
+  TRUE_FALSE
+  MATCHING
+  ORDERING
+  FILL_BLANKS
+  INTERACTIVE_CONTENT
   QUESTIONS
   INCORRECT_SECTION
   ASSIGNMENT
@@ -57,6 +71,8 @@ model Role {
   name        String   @unique
   displayName String
   users       User[]
+  authorizedEmails AuthorizedEmail[]
+  accessibleCourses Course[] @relation("CourseAccessRole")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -67,11 +83,29 @@ model Organization {
   institutionName String?
   slug            String        @unique
   users           User[]
-  courses         Course[]
+  authorizedEmails AuthorizedEmail[]
+  courses         Course[] @relation("CourseOwnerOrganization")
+  accessibleCourses Course[] @relation("CourseAccessOrganization")
   enrollments     Enrollment[]
   certificates    Certificate[]
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
+}
+
+model AuthorizedEmail {
+  id             String        @id @default(uuid()) @db.Uuid
+  email          String        @unique
+  roleId         String        @db.Uuid
+  organizationId String?       @db.Uuid
+  role           Role          @relation(fields: [roleId], references: [id])
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  registeredAt   DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([roleId])
+  @@index([organizationId])
+  @@index([registeredAt])
 }
 
 model User {
@@ -96,6 +130,7 @@ model User {
   certificates       Certificate[]
   sessions           Session[]
   passwordTokens     PasswordToken[]
+  courseAccess       CourseAccessUser[]
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
@@ -161,10 +196,16 @@ model Course {
   passingGrade       Float            @default(70)
   status             CourseStatus     @default(DRAFT)
   certificateEnabled Boolean          @default(false)
+  accessType         CourseAccessType @default(ROLE)
+  accessRoleId       String?          @db.Uuid
+  accessOrganizationId String?        @db.Uuid
   instructorId       String?          @db.Uuid
   organizationId     String?          @db.Uuid
   instructor         User?            @relation("CourseInstructor", fields: [instructorId], references: [id])
-  organization       Organization?    @relation(fields: [organizationId], references: [id])
+  organization       Organization?    @relation("CourseOwnerOrganization", fields: [organizationId], references: [id])
+  accessRole         Role?            @relation("CourseAccessRole", fields: [accessRoleId], references: [id])
+  accessOrganization Organization?    @relation("CourseAccessOrganization", fields: [accessOrganizationId], references: [id])
+  accessUsers        CourseAccessUser[]
   blocks             CourseBlock[]
   enrollments        Enrollment[]
   grades             Grade[]
@@ -174,7 +215,20 @@ model Course {
 
   @@index([instructorId])
   @@index([organizationId])
+  @@index([accessRoleId])
+  @@index([accessOrganizationId])
   @@index([status])
+}
+
+model CourseAccessUser {
+  courseId String @db.Uuid
+  userId   String @db.Uuid
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([courseId, userId])
+  @@index([userId])
 }
 
 model CourseBlock {
