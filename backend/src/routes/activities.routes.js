@@ -12,6 +12,7 @@ import { idParamSchema } from "../validation/common.js";
 
 const router = Router();
 const activityTypes = [
+  "COMPOSITE",
   "YOUTUBE_VIDEO",
   "READING",
   "EXTERNAL_LINK",
@@ -27,6 +28,20 @@ const activityTypes = [
   "ASSIGNMENT",
   "FINAL_EXAM"
 ];
+const compositeModuleTypes = [
+  "YOUTUBE_VIDEO",
+  "READING",
+  "EXTERNAL_LINK",
+  "EMBEDDED_CONTENT",
+  "CASE_STUDY",
+  "TRUE_FALSE",
+  "MATCHING",
+  "ORDERING",
+  "FILL_BLANKS",
+  "INTERACTIVE_CONTENT",
+  "QUESTIONS",
+  "INCORRECT_SECTION"
+];
 const input = z.object({
   topicId: z.string().uuid(),
   title: z.string().trim().min(2).max(180),
@@ -39,8 +54,7 @@ const input = z.object({
   maxAttempts: z.coerce.number().int().min(1).nullable().optional()
 });
 
-function validateContent(type, content) {
-  const schemas = {
+const contentSchemas = {
     YOUTUBE_VIDEO: z.object({
       url: z.string().url(),
       durationSeconds: z.number().positive()
@@ -132,8 +146,37 @@ function validateContent(type, content) {
         })
       ).min(1)
     })
-  };
-  const result = schemas[type].safeParse(content);
+};
+
+function validateContent(type, content) {
+  if (type === "COMPOSITE") {
+    const compositeResult = z.object({
+      modules: z.array(z.object({
+        id: z.string().min(1).max(100),
+        type: z.enum(compositeModuleTypes),
+        title: z.string().trim().max(180).optional().default(""),
+        content: z.record(z.unknown()),
+        minimumReadSeconds: z.number().int().min(0).optional().default(0),
+        minimumWatchPercent: z.number().min(1).max(100).optional().default(80)
+      })).min(1).max(100)
+    }).safeParse(content);
+    if (!compositeResult.success) {
+      throw new HttpError(400, "Invalid modular activity content", compositeResult.error.flatten());
+    }
+    const seenIds = new Set();
+    const modules = compositeResult.data.modules.map((module) => {
+      if (seenIds.has(module.id)) throw new HttpError(400, "Every content block must have a unique id");
+      seenIds.add(module.id);
+      const moduleResult = contentSchemas[module.type].safeParse(module.content);
+      if (!moduleResult.success) {
+        throw new HttpError(400, `Invalid ${module.type} block content`, moduleResult.error.flatten());
+      }
+      return { ...module, content: moduleResult.data };
+    });
+    return { modules };
+  }
+
+  const result = contentSchemas[type].safeParse(content);
   if (!result.success) throw new HttpError(400, "Invalid activity content", result.error.flatten());
   return result.data;
 }

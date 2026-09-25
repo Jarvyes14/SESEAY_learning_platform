@@ -3,6 +3,8 @@ dist/
 .env
 .DS_Store
 *.log
+test-results/
+playwright-report/
+playwright-artifacts/
 frontend/.vite/
 backend/prisma/dev.db
-

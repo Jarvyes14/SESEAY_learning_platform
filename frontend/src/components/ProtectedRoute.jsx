@@ -6,7 +6,7 @@ export default function ProtectedRoute({ roles }) {
   const location = useLocation();
 
   if (loading) {
-    return <div className="container-page py-20 text-center text-text-secondary">Loading your workspace…</div>;
+    return <div className="container-page py-20 text-center text-text-secondary">Cargando tu espacio de trabajo…</div>;
   }
   if (!user) {
     return <Navigate to="/login" replace state={{ from: location }} />;

@@ -12,49 +12,24 @@ import {
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
+import { roleLabel } from "../lib/labels.js";
 import Logo from "./Logo.jsx";
 
 const linksByRole = {
   platform_admin: [
-    ["Overview", "/admin", LayoutDashboard],
-    ["My learning", "/learning", LibraryBig],
-    ["Users", "/admin/users", Users],
-    ["Courses", "/instructor", BookOpen],
-    ["Progress", "/progress", BarChart3],
-    ["Grades", "/grades", GraduationCap],
-    ["Certificates", "/certificates", Award],
-    ["Settings", "/admin/settings", Settings]
+    ["Inicio", "/admin", LayoutDashboard], ["Mi aprendizaje", "/learning", LibraryBig], ["Usuarios", "/admin/users", Users], ["Cursos", "/instructor", BookOpen], ["Progreso", "/progress", BarChart3], ["Calificaciones", "/grades", GraduationCap], ["Certificados", "/certificates", Award], ["Configuración", "/admin/settings", Settings]
   ],
   government_admin: [
-    ["Overview", "/admin", LayoutDashboard],
-    ["My learning", "/learning", LibraryBig],
-    ["Users", "/admin/users", Users],
-    ["Courses", "/instructor", BookOpen],
-    ["Progress", "/progress", BarChart3],
-    ["Grades", "/grades", GraduationCap],
-    ["Certificates", "/certificates", Award]
+    ["Inicio", "/admin", LayoutDashboard], ["Mi aprendizaje", "/learning", LibraryBig], ["Usuarios", "/admin/users", Users], ["Cursos", "/instructor", BookOpen], ["Progreso", "/progress", BarChart3], ["Calificaciones", "/grades", GraduationCap], ["Certificados", "/certificates", Award]
   ],
   organization_admin: [
-    ["Overview", "/admin", LayoutDashboard],
-    ["My learning", "/learning", LibraryBig],
-    ["Users", "/admin/users", Users],
-    ["Courses", "/instructor", BookOpen],
-    ["Progress", "/progress", BarChart3],
-    ["Grades", "/grades", GraduationCap],
-    ["Certificates", "/certificates", Award]
+    ["Inicio", "/admin", LayoutDashboard], ["Mi aprendizaje", "/learning", LibraryBig], ["Usuarios", "/admin/users", Users], ["Cursos", "/instructor", BookOpen], ["Progreso", "/progress", BarChart3], ["Calificaciones", "/grades", GraduationCap], ["Certificados", "/certificates", Award]
   ],
   instructor: [
-    ["Dashboard", "/instructor", LayoutDashboard],
-    ["My learning", "/learning", LibraryBig],
-    ["Progress", "/progress", BarChart3],
-    ["Grades", "/grades", GraduationCap],
-    ["Certificates", "/certificates", Award]
+    ["Panel", "/instructor", LayoutDashboard], ["Mi aprendizaje", "/learning", LibraryBig], ["Progreso", "/progress", BarChart3], ["Calificaciones", "/grades", GraduationCap], ["Certificados", "/certificates", Award]
   ],
   student: [
-    ["My courses", "/learning", BookOpen],
-    ["Progress", "/progress", BarChart3],
-    ["Grades", "/grades", GraduationCap],
-    ["Certificates", "/certificates", Award]
+    ["Mis cursos", "/learning", BookOpen], ["Progreso", "/progress", BarChart3], ["Calificaciones", "/grades", GraduationCap], ["Certificados", "/certificates", Award]
   ]
 };
 
@@ -72,7 +47,7 @@ export default function Header() {
     <header className="border-b border-border bg-surface">
       <div className="container-page flex min-h-16 flex-wrap items-center gap-6 py-3">
         <Logo />
-        <nav className="flex flex-1 flex-wrap items-center gap-1" aria-label="Primary navigation">
+        <nav className="flex flex-1 flex-wrap items-center gap-1" aria-label="Navegación principal">
           {links.map(([label, href, Icon]) => (
             <NavLink
               key={href}
@@ -96,13 +71,13 @@ export default function Header() {
           </span>
           <div className="hidden leading-tight sm:block">
             <p className="text-sm font-semibold">{user?.firstName} {user?.lastName}</p>
-            <p className="text-xs capitalize text-text-secondary">{user?.role?.replaceAll("_", " ")}</p>
+            <p className="text-xs text-text-secondary">{roleLabel(user?.role)}</p>
           </div>
           <button
             type="button"
             onClick={handleLogout}
             className="rounded-md p-2 text-text-secondary hover:bg-surface-muted hover:text-error"
-            aria-label="Sign out"
+            aria-label="Cerrar sesión"
           >
             <LogOut size={18} />
           </button>

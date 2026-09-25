@@ -1,4 +1,5 @@
 export default function StatusBadge({ value }) {
+  const labels = { PUBLISHED: "PUBLICADO", COMPLETED: "COMPLETADO", GRADED: "CALIFICADO", ACTIVE: "ACTIVO", AVAILABLE: "DISPONIBLE", IN_PROGRESS: "EN PROGRESO", DRAFT: "BORRADOR", PENDING_REVIEW: "PENDIENTE DE REVISIÓN", ARCHIVED: "ARCHIVADO", LOCKED: "BLOQUEADO", WITHDRAWN: "RETIRADO" };
   const styles = {
     PUBLISHED: "bg-success/10 text-success",
     COMPLETED: "bg-success/10 text-success",
@@ -14,8 +15,7 @@ export default function StatusBadge({ value }) {
   };
   return (
     <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${styles[value] ?? styles.ARCHIVED}`}>
-      {value?.replaceAll("_", " ")}
+      {labels[value] ?? value?.replaceAll("_", " ")}
     </span>
   );
 }
-

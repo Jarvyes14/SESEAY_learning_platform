@@ -6,6 +6,7 @@ import PageHeading from "../components/PageHeading.jsx";
 import StatusBadge from "../components/StatusBadge.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { api } from "../lib/api.js";
+import { roleLabel } from "../lib/labels.js";
 
 const initialAuthorization = {
   email: "",
@@ -126,7 +127,7 @@ export default function UsersPage() {
         method: "PATCH",
         body: JSON.stringify({ isActive: !target.isActive })
       });
-      setMessage(`The account for ${target.email} is now ${target.isActive ? "inactive" : "active"}.`);
+      setMessage(`La cuenta de ${target.email} ahora está ${target.isActive ? "inactiva" : "activa"}.`);
       await load();
     } catch (requestError) {
       setError(requestError.message);
@@ -199,7 +200,7 @@ export default function UsersPage() {
     setSubmitting(target.id);
     try {
       await api(`/users/${target.id}`, { method: "DELETE" });
-      setMessage(`The account for ${target.email} was deleted.`);
+      setMessage(`La cuenta de ${target.email} fue eliminada.`);
       await load();
     } catch (requestError) {
       setError(requestError.message);
@@ -211,19 +212,19 @@ export default function UsersPage() {
   return (
     <div className="container-page py-10">
       <PageHeading
-        eyebrow="Identity and access"
-        title="Authorized emails and users"
-        description="Authorize email addresses here. Each person then creates their own account and chooses their own password."
+        eyebrow="Identidad y acceso"
+        title="Correos autorizados y personas usuarias"
+        description="Autoriza aquí las direcciones de correo. Después, cada persona crea su cuenta y elige su contraseña."
         actions={
           <>
-            <DisabledButton>Bulk CSV import</DisabledButton>
+            <DisabledButton>Importación masiva CSV</DisabledButton>
             {["platform_admin", "government_admin"].includes(currentUser.role) && (
               <button type="button" className="btn-secondary" onClick={() => setShowOrganizationForm((value) => !value)}>
-                <Building2 size={16} /> New organization
+                <Building2 size={16} /> Nueva organización
               </button>
             )}
             <button type="button" className="btn-primary" onClick={() => setShowAuthorizationForm((value) => !value)}>
-              <MailCheck size={16} /> Authorize email
+              <MailCheck size={16} /> Autorizar correo
             </button>
           </>
         }
@@ -233,11 +234,11 @@ export default function UsersPage() {
 
       {showOrganizationForm && (
         <form onSubmit={createOrganization} className="panel mt-6 grid gap-4 p-6 md:grid-cols-3">
-          <FormField label="Organization name" value={organizationForm.name} onChange={(value) => setOrganizationForm({ ...organizationForm, name: value })} />
-          <FormField label="Certificate institution name" value={organizationForm.institutionName} onChange={(value) => setOrganizationForm({ ...organizationForm, institutionName: value })} />
+          <FormField label="Nombre de la organización" value={organizationForm.name} onChange={(value) => setOrganizationForm({ ...organizationForm, name: value })} />
+          <FormField label="Nombre institucional en certificados" value={organizationForm.institutionName} onChange={(value) => setOrganizationForm({ ...organizationForm, institutionName: value })} />
           <FormField label="Slug" value={organizationForm.slug} onChange={(value) => setOrganizationForm({ ...organizationForm, slug: value })} />
           <button className="btn-primary md:col-span-3" type="submit" disabled={submitting !== ""}>
-            <Plus size={16} /> {submitting === "organization" ? "Creating…" : "Create organization"}
+            <Plus size={16} /> {submitting === "organization" ? "Creando…" : "Crear organización"}
           </button>
         </form>
       )}
@@ -246,33 +247,33 @@ export default function UsersPage() {
         <form onSubmit={authorizeEmail} className="panel mt-6 grid gap-4 p-6 md:grid-cols-2">
           <FormField label="Email" type="email" value={form.email} onChange={(value) => setForm({ ...form, email: value })} />
           <label>
-            <span className="mb-2 block text-sm font-semibold">Role</span>
+            <span className="mb-2 block text-sm font-semibold">Rol</span>
             <select className="input-field" value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}>
-              {roles.map((role) => <option key={role.id} value={role.name}>{role.displayName}</option>)}
+              {roles.map((role) => <option key={role.id} value={role.name}>{roleLabel(role.name)}</option>)}
             </select>
           </label>
           {currentUser.role === "organization_admin" ? (
             <div>
-              <span className="mb-2 block text-sm font-semibold">Organization</span>
+              <span className="mb-2 block text-sm font-semibold">Organización</span>
               <p className="input-field bg-surface-muted">{currentUser.organization?.name}</p>
             </div>
           ) : (
             <label>
-              <span className="mb-2 block text-sm font-semibold">Organization</span>
+              <span className="mb-2 block text-sm font-semibold">Organización</span>
               <select
                 className="input-field"
                 value={form.organizationId}
                 onChange={(event) => setForm({ ...form, organizationId: event.target.value })}
                 required={form.role === "organization_admin"}
               >
-                <option value="">No organization</option>
+                <option value="">Sin organización</option>
                 {organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}
               </select>
             </label>
           )}
-          <p className="text-xs text-text-secondary md:col-span-2">This does not create an account. The person must use this exact email on the Create account page and choose their own password.</p>
+          <p className="text-xs text-text-secondary md:col-span-2">Esto no crea una cuenta. La persona deberá usar exactamente este correo en la página Crear cuenta y elegir su contraseña.</p>
           <button className="btn-primary md:col-span-2" type="submit" disabled={submitting !== "" || !roles.length}>
-            <MailCheck size={16} /> {submitting === "authorization" ? "Authorizing…" : "Authorize email"}
+            <MailCheck size={16} /> {submitting === "authorization" ? "Autorizando…" : "Autorizar correo"}
           </button>
         </form>
       )}
@@ -281,35 +282,35 @@ export default function UsersPage() {
         <form onSubmit={updateUser} className="panel mt-6 grid gap-4 p-6 md:grid-cols-2">
           <div className="flex items-center justify-between md:col-span-2">
             <div>
-              <p className="eyebrow">Edit account</p>
+              <p className="eyebrow">Editar cuenta</p>
               <h2 className="mt-1 text-xl font-bold">{editingUser.firstName} {editingUser.lastName}</h2>
             </div>
-            <button type="button" className="rounded-md p-2 text-text-secondary hover:bg-surface-muted" onClick={cancelEdit} aria-label="Close editor">
+            <button type="button" className="rounded-md p-2 text-text-secondary hover:bg-surface-muted" onClick={cancelEdit} aria-label="Cerrar editor">
               <X size={18} />
             </button>
           </div>
-          <FormField label="First name" value={editForm.firstName} onChange={(value) => setEditForm({ ...editForm, firstName: value })} />
-          <FormField label="Last name" value={editForm.lastName} onChange={(value) => setEditForm({ ...editForm, lastName: value })} />
+          <FormField label="Nombre" value={editForm.firstName} onChange={(value) => setEditForm({ ...editForm, firstName: value })} />
+          <FormField label="Apellidos" value={editForm.lastName} onChange={(value) => setEditForm({ ...editForm, lastName: value })} />
           <FormField label="Email" type="email" value={editForm.email} onChange={(value) => setEditForm({ ...editForm, email: value })} />
           <label>
-            <span className="mb-2 block text-sm font-semibold">Role</span>
+            <span className="mb-2 block text-sm font-semibold">Rol</span>
             <select
               className="input-field"
               value={editForm.role}
               disabled={editingUser.id === currentUser.id}
               onChange={(event) => setEditForm({ ...editForm, role: event.target.value })}
             >
-              {roles.map((role) => <option key={role.id} value={role.name}>{role.displayName}</option>)}
+              {roles.map((role) => <option key={role.id} value={role.name}>{roleLabel(role.name)}</option>)}
             </select>
           </label>
           {currentUser.role === "organization_admin" ? (
             <div>
-              <span className="mb-2 block text-sm font-semibold">Organization</span>
+              <span className="mb-2 block text-sm font-semibold">Organización</span>
               <p className="input-field bg-surface-muted">{currentUser.organization?.name}</p>
             </div>
           ) : (
             <label>
-              <span className="mb-2 block text-sm font-semibold">Organization</span>
+              <span className="mb-2 block text-sm font-semibold">Organización</span>
               <select
                 className="input-field"
                 value={editForm.organizationId}
@@ -317,7 +318,7 @@ export default function UsersPage() {
                 required={editForm.role === "organization_admin"}
                 onChange={(event) => setEditForm({ ...editForm, organizationId: event.target.value })}
               >
-                <option value="">No organization</option>
+                <option value="">Sin organización</option>
                 {organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}
               </select>
             </label>
@@ -330,37 +331,37 @@ export default function UsersPage() {
               onChange={(event) => setEditForm({ ...editForm, isActive: event.target.checked })}
             />
             <span>
-              <strong className="block text-sm">Active account</strong>
-              <span className="text-xs text-text-secondary">Inactive users cannot sign in.</span>
+              <strong className="block text-sm">Cuenta activa</strong>
+              <span className="text-xs text-text-secondary">Las personas inactivas no pueden iniciar sesión.</span>
             </span>
           </label>
-          <p className="text-xs text-text-secondary md:col-span-2">Changing the email, password, role, organization, or status closes the user's active sessions.</p>
+          <p className="text-xs text-text-secondary md:col-span-2">Cambiar el correo, contraseña, rol, organización o estado cerrará las sesiones activas de la persona.</p>
           <div className="flex justify-end gap-3 md:col-span-2">
-            <button type="button" className="btn-secondary" onClick={cancelEdit} disabled={submitting !== ""}>Cancel</button>
+            <button type="button" className="btn-secondary" onClick={cancelEdit} disabled={submitting !== ""}>Cancelar</button>
             <button type="submit" className="btn-primary" disabled={submitting !== ""}>
-              {submitting === editingUser.id ? "Saving…" : "Save changes"}
+              {submitting === editingUser.id ? "Guardando…" : "Guardar cambios"}
             </button>
           </div>
         </form>
       )}
 
       <section className="mt-8">
-        <h2 className="text-xl font-bold">Authorized emails ({authorizedEmails.length})</h2>
+        <h2 className="text-xl font-bold">Correos autorizados ({authorizedEmails.length})</h2>
         {authorizedEmails.length ? (
           <div className="mt-4 overflow-x-auto rounded-lg border border-border bg-surface">
             <table className="w-full min-w-3xl text-left text-sm">
               <thead className="bg-surface-muted text-xs uppercase text-text-secondary">
-                <tr><th className="px-5 py-4">Email</th><th className="px-5 py-4">Role</th><th className="px-5 py-4">Organization</th><th className="px-5 py-4">Registration</th><th className="px-5 py-4">Actions</th></tr>
+                <tr><th className="px-5 py-4">Correo</th><th className="px-5 py-4">Rol</th><th className="px-5 py-4">Organización</th><th className="px-5 py-4">Registro</th><th className="px-5 py-4">Acciones</th></tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {authorizedEmails.map((entry) => (
                   <tr key={entry.id}>
                     <td className="px-5 py-4 font-semibold">{entry.email}</td>
-                    <td className="px-5 py-4 capitalize">{entry.role.replaceAll("_", " ")}</td>
-                    <td className="px-5 py-4 text-text-secondary">{entry.organization?.name ?? "None"}</td>
+                    <td className="px-5 py-4">{roleLabel(entry.role)}</td>
+                    <td className="px-5 py-4 text-text-secondary">{entry.organization?.name ?? "Ninguna"}</td>
                     <td className="px-5 py-4">
                       <span className={entry.registeredAt ? "text-success" : "text-warning"}>
-                        {entry.registeredAt ? "Account created" : "Pending"}
+                        {entry.registeredAt ? "Cuenta creada" : "Pendiente"}
                       </span>
                     </td>
                     <td className="px-5 py-4">
@@ -368,7 +369,7 @@ export default function UsersPage() {
                         type="button"
                         className="rounded-md border border-border p-2 text-text-secondary hover:text-error disabled:opacity-60"
                         onClick={() => removeAuthorization(entry)}
-                        title="Remove registration authorization"
+                        title="Eliminar autorización de registro"
                         disabled={submitting !== ""}
                       >
                         <Trash2 size={16} />
@@ -380,43 +381,43 @@ export default function UsersPage() {
             </table>
           </div>
         ) : (
-          <div className="mt-4"><EmptyState title="No authorized emails" description="Authorize an email so its owner can create an account." /></div>
+          <div className="mt-4"><EmptyState title="No hay correos autorizados" description="Autoriza un correo para que su propietario pueda crear una cuenta." /></div>
         )}
       </section>
 
       <section className="mt-9">
-        <h2 className="text-xl font-bold">Organizations ({organizations.length})</h2>
+        <h2 className="text-xl font-bold">Organizaciones ({organizations.length})</h2>
         {organizations.length ? (
           <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {organizations.map((organization) => (
               <article key={organization.id} className="panel p-5">
                 <Building2 className="text-primary" />
                 <h3 className="mt-3 font-bold">{organization.name}</h3>
-                <p className="mt-1 text-sm text-text-secondary">{organization.institutionName || "Uses platform institution name"}</p>
-                <p className="mt-4 text-xs text-text-secondary">{organization._count.users} users · {organization._count.courses} courses</p>
+                <p className="mt-1 text-sm text-text-secondary">{organization.institutionName || "Usa el nombre institucional de la plataforma"}</p>
+                <p className="mt-4 text-xs text-text-secondary">{organization._count.users} personas · {organization._count.courses} cursos</p>
               </article>
             ))}
           </div>
         ) : (
-          <div className="mt-4"><EmptyState title="No organizations" description="Create an organization before assigning organization administrators or institution-specific certificates." /></div>
+          <div className="mt-4"><EmptyState title="No hay organizaciones" description="Crea una organización antes de asignar administradores o certificados institucionales." /></div>
         )}
       </section>
 
       <section className="mt-9">
-        <h2 className="text-xl font-bold">Users ({users.length})</h2>
+        <h2 className="text-xl font-bold">Personas usuarias ({users.length})</h2>
         {users.length ? (
           <div className="mt-4 overflow-x-auto rounded-lg border border-border bg-surface">
             <table className="w-full min-w-3xl text-left text-sm">
               <thead className="bg-surface-muted text-xs uppercase text-text-secondary">
-                <tr><th className="px-5 py-4">User</th><th className="px-5 py-4">Role</th><th className="px-5 py-4">Organization</th><th className="px-5 py-4">Status</th><th className="px-5 py-4">Último acceso</th><th className="px-5 py-4">Actions</th></tr>
+                <tr><th className="px-5 py-4">Persona</th><th className="px-5 py-4">Rol</th><th className="px-5 py-4">Organización</th><th className="px-5 py-4">Estado</th><th className="px-5 py-4">Último acceso</th><th className="px-5 py-4">Acciones</th></tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {users.map((target) => (
                   <Fragment key={target.id}>
                   <tr>
                     <td className="px-5 py-4"><strong>{target.firstName} {target.lastName}</strong><span className="block text-xs text-text-secondary">{target.email}</span></td>
-                    <td className="px-5 py-4 capitalize">{target.role.replaceAll("_", " ")}</td>
-                    <td className="px-5 py-4 text-text-secondary">{target.organization?.name ?? "None"}</td>
+                    <td className="px-5 py-4">{roleLabel(target.role)}</td>
+                    <td className="px-5 py-4 text-text-secondary">{target.organization?.name ?? "Ninguna"}</td>
                     <td className="px-5 py-4"><StatusBadge value={target.isActive ? "ACTIVE" : "ARCHIVED"} /></td>
                     <td className="px-5 py-4">
                       {target.lastAccessAt ? (
@@ -441,7 +442,7 @@ export default function UsersPage() {
                           type="button"
                           className="rounded-md border border-border p-2 text-text-secondary hover:text-primary disabled:opacity-60"
                           onClick={() => beginEdit(target)}
-                          title="Edit user"
+                          title="Editar persona"
                           disabled={submitting !== ""}
                         >
                           <Pencil size={16} />
@@ -451,14 +452,14 @@ export default function UsersPage() {
                             type="button"
                             className="rounded-md border border-border p-2 text-text-secondary hover:text-primary disabled:opacity-60"
                             onClick={() => toggleUser(target)}
-                            title={target.isActive ? "Deactivate account" : "Activate account"}
+                            title={target.isActive ? "Desactivar cuenta" : "Activar cuenta"}
                             disabled={submitting !== ""}
                           >
                             <Power size={16} />
                           </button>
                         )}
                         {currentUser.role === "platform_admin" && currentUser.id !== target.id && (
-                          <button type="button" className="rounded-md border border-border p-2 text-text-secondary hover:text-error disabled:opacity-60" onClick={() => deleteUser(target)} title="Delete user" disabled={submitting !== ""}><Trash2 size={16} /></button>
+                          <button type="button" className="rounded-md border border-border p-2 text-text-secondary hover:text-error disabled:opacity-60" onClick={() => deleteUser(target)} title="Eliminar persona" disabled={submitting !== ""}><Trash2 size={16} /></button>
                         )}
                       </div>
                     </td>
@@ -485,7 +486,7 @@ export default function UsersPage() {
             </table>
           </div>
         ) : (
-          <div className="mt-4"><EmptyState title="No users" description="Registered accounts will appear here after an authorized person creates one." /></div>
+          <div className="mt-4"><EmptyState title="No hay personas usuarias" description="Las cuentas registradas aparecerán cuando una persona autorizada cree la suya." /></div>
         )}
       </section>
     </div>

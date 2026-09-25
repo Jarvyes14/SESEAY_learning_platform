@@ -21,8 +21,8 @@ export default function ResetPasswordPage() {
   async function submit(event) {
     event.preventDefault();
     setError("");
-    if (!token) return setError("The recovery link is incomplete.");
-    if (password !== confirmation) return setError("Passwords do not match.");
+    if (!token) return setError("El enlace de recuperación está incompleto.");
+    if (password !== confirmation) return setError("Las contraseñas no coinciden.");
     setSubmitting(true);
     try {
       await api("/auth/reset-password", { method: "POST", body: JSON.stringify({ token, password }) });
@@ -38,14 +38,14 @@ export default function ResetPasswordPage() {
     <main className="min-h-screen bg-background p-8">
       <Logo />
       <form className="panel mx-auto mt-20 max-w-md p-7" onSubmit={submit}>
-        <h1 className="font-display text-3xl font-bold">Create a new password</h1>
-        <p className="mt-2 text-sm text-text-secondary">This link can be used only once.</p>
-        <label className="mt-6 block"><span className="mb-2 block text-sm font-semibold">New password</span><input className="input-field" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required autoComplete="new-password" /></label>
-        <label className="mt-4 block"><span className="mb-2 block text-sm font-semibold">Confirm password</span><input className="input-field" type="password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} required autoComplete="new-password" /></label>
+        <h1 className="font-display text-3xl font-bold">Crea una nueva contraseña</h1>
+        <p className="mt-2 text-sm text-text-secondary">Este enlace sólo puede utilizarse una vez.</p>
+        <label className="mt-6 block"><span className="mb-2 block text-sm font-semibold">Nueva contraseña</span><input className="input-field" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required autoComplete="new-password" /></label>
+        <label className="mt-4 block"><span className="mb-2 block text-sm font-semibold">Confirmar contraseña</span><input className="input-field" type="password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} required autoComplete="new-password" /></label>
         <div className="mt-3"><PasswordPolicyHint policy={policy} /></div>
         {error && <p className="mt-4 rounded-md border border-error bg-error/10 p-3 text-sm text-error">{error}</p>}
-        <button className="btn-primary mt-6 w-full" type="submit" disabled={submitting}>{submitting ? "Updating…" : "Update password"}</button>
-        <Link className="mt-5 block text-center text-sm font-semibold text-primary" to="/login">Back to sign in</Link>
+        <button className="btn-primary mt-6 w-full" type="submit" disabled={submitting}>{submitting ? "Actualizando…" : "Actualizar contraseña"}</button>
+        <Link className="mt-5 block text-center text-sm font-semibold text-primary" to="/login">Volver al inicio de sesión</Link>
       </form>
     </main>
   );

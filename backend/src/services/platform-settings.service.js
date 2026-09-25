@@ -5,7 +5,11 @@ import { prisma } from "../lib/prisma.js";
 export const defaultPlatformSettings = {
   id: "global",
   platformName: "Integrity Learning",
-  platformSubtitle: "Public Service Academy",
+  platformSubtitle: "Academia de Servicio Público",
+  primaryColor: "#1F4E79",
+  secondaryColor: "#2D6053",
+  accentColor: "#AE792D",
+  logoUrl: null,
   supportEmail: null,
   maxActiveSessions: 5,
   passwordMinLength: 12,
@@ -74,6 +78,10 @@ export function publicPlatformSettings(settings) {
   return {
     platformName: settings.platformName,
     platformSubtitle: settings.platformSubtitle,
+    primaryColor: settings.primaryColor,
+    secondaryColor: settings.secondaryColor,
+    accentColor: settings.accentColor,
+    logoUrl: settings.logoUrl,
     supportEmail: settings.supportEmail,
     passwordPolicy: {
       minLength: settings.passwordMinLength,

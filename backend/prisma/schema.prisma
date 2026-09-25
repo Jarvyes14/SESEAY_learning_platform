@@ -26,6 +26,7 @@ enum CourseAccessType {
 }
 
 enum ActivityType {
+  COMPOSITE
   YOUTUBE_VIDEO
   READING
   EXTERNAL_LINK
@@ -155,7 +156,11 @@ model PasswordToken {
 model PlatformSettings {
   id                         String   @id @default("global")
   platformName               String   @default("Integrity Learning")
-  platformSubtitle           String   @default("Public Service Academy")
+  platformSubtitle           String   @default("Academia de Servicio Público")
+  primaryColor               String   @default("#1F4E79")
+  secondaryColor             String   @default("#2D6053")
+  accentColor                String   @default("#AE792D")
+  logoUrl                    String?
   supportEmail               String?
   maxActiveSessions          Int      @default(5)
   passwordMinLength          Int      @default(12)

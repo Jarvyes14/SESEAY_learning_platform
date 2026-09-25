@@ -10,6 +10,11 @@ import { getPlatformSettings, publicPlatformSettings } from "../services/platfor
 import { env } from "../config/env.js";
 
 const router = Router();
+const hexColor = z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Usa un color hexadecimal de 6 dígitos");
+const logoValue = z.string().max(1_500_000).refine(
+  (value) => /^https?:\/\//i.test(value) || /^data:image\/(png|jpeg|jpg|webp|svg\+xml);base64,/i.test(value),
+  "El logo debe ser una URL válida o una imagen compatible"
+).nullable();
 
 router.get(
   "/public",
@@ -37,6 +42,10 @@ router.patch(
     z.object({
       platformName: z.string().trim().min(2).max(100).optional(),
       platformSubtitle: z.string().trim().min(2).max(160).optional(),
+      primaryColor: hexColor.optional(),
+      secondaryColor: hexColor.optional(),
+      accentColor: hexColor.optional(),
+      logoUrl: logoValue.optional(),
       supportEmail: z.string().trim().email().nullable().optional(),
       maxActiveSessions: z.number().int().min(1).max(50).optional(),
       passwordMinLength: z.number().int().min(8).max(72).optional(),

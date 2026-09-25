@@ -63,3 +63,53 @@ test("student activity payloads hide every correct answer", () => {
   assert.equal(sanitized.content.statements[0].correctAnswer, undefined);
   assert.equal(sanitized.content.statements[0].prompt, "Statement");
 });
+
+test("modular activities aggregate scores across different block types", () => {
+  const activity = {
+    type: "COMPOSITE",
+    content: {
+      modules: [
+        { id: "text", type: "READING", content: { body: "Introductory content" } },
+        {
+          id: "quiz",
+          type: "QUESTIONS",
+          content: { questions: [{ prompt: "One", options: ["A", "B"], correctIndex: 1, points: 2 }] }
+        },
+        {
+          id: "truth",
+          type: "TRUE_FALSE",
+          content: { statements: [{ prompt: "Two", correctAnswer: false, points: 1 }] }
+        }
+      ]
+    }
+  };
+  const result = gradeAutomaticActivity(activity, {
+    modules: { quiz: { answers: [1] }, truth: { answers: [true] } }
+  });
+  assert.deepEqual(result, { score: 2, maxScore: 3 });
+});
+
+test("student modular activities hide answers inside every assessment block", () => {
+  const sanitized = sanitizeActivity(
+    {
+      type: "COMPOSITE",
+      content: {
+        modules: [
+          {
+            id: "quiz",
+            type: "QUESTIONS",
+            content: { questions: [{ prompt: "Question", options: ["A", "B"], correctIndex: 0, points: 1 }] }
+          },
+          {
+            id: "truth",
+            type: "TRUE_FALSE",
+            content: { statements: [{ prompt: "Statement", correctAnswer: true, points: 1 }] }
+          }
+        ]
+      }
+    },
+    false
+  );
+  assert.equal(sanitized.content.modules[0].content.questions[0].correctIndex, undefined);
+  assert.equal(sanitized.content.modules[1].content.statements[0].correctAnswer, undefined);
+});

@@ -232,9 +232,9 @@ export async function recalculateEnrollment(enrollmentId) {
   return courseProgress;
 }
 
-export function gradeAutomaticActivity(activity, response) {
-  if (["QUESTIONS", "FINAL_EXAM", "CASE_STUDY"].includes(activity.type)) {
-    const questions = activity.content?.questions ?? [];
+function gradeAutomaticContent(type, content, response, fallbackPoints = 1) {
+  if (["QUESTIONS", "FINAL_EXAM", "CASE_STUDY"].includes(type)) {
+    const questions = content?.questions ?? [];
     const answers = response?.answers ?? [];
     const maxScore = questions.reduce((sum, question) => sum + (question.points ?? 1), 0);
     const score = questions.reduce(
@@ -245,8 +245,8 @@ export function gradeAutomaticActivity(activity, response) {
     return { score, maxScore };
   }
 
-  if (activity.type === "INCORRECT_SECTION") {
-    const sections = activity.content?.sections ?? [];
+  if (type === "INCORRECT_SECTION") {
+    const sections = content?.sections ?? [];
     const expected = sections
       .map((section, index) => (section.incorrect ? index : null))
       .filter((index) => index !== null);
@@ -254,11 +254,11 @@ export function gradeAutomaticActivity(activity, response) {
     const correct =
       expected.length === selected.length &&
       expected.every((index, position) => index === selected[position]);
-    return { score: correct ? activity.points || 1 : 0, maxScore: activity.points || 1 };
+    return { score: correct ? fallbackPoints : 0, maxScore: fallbackPoints };
   }
 
-  if (activity.type === "TRUE_FALSE") {
-    const statements = activity.content?.statements ?? [];
+  if (type === "TRUE_FALSE") {
+    const statements = content?.statements ?? [];
     const answers = response?.answers ?? [];
     const maxScore = statements.reduce((sum, statement) => sum + (statement.points ?? 1), 0);
     const score = statements.reduce(
@@ -269,22 +269,22 @@ export function gradeAutomaticActivity(activity, response) {
     return { score, maxScore };
   }
 
-  if (activity.type === "MATCHING") {
-    const pairs = activity.content?.pairs ?? [];
+  if (type === "MATCHING") {
+    const pairs = content?.pairs ?? [];
     const matches = response?.matches ?? [];
     const score = pairs.reduce((sum, _pair, index) => sum + (matches[index] === index ? 1 : 0), 0);
     return { score, maxScore: pairs.length };
   }
 
-  if (activity.type === "ORDERING") {
-    const items = activity.content?.items ?? [];
+  if (type === "ORDERING") {
+    const items = content?.items ?? [];
     const order = response?.order ?? [];
     const score = items.reduce((sum, _item, index) => sum + (order[index] === index ? 1 : 0), 0);
     return { score, maxScore: items.length };
   }
 
-  if (activity.type === "FILL_BLANKS") {
-    const sentences = activity.content?.sentences ?? [];
+  if (type === "FILL_BLANKS") {
+    const sentences = content?.sentences ?? [];
     const answers = response?.answers ?? [];
     const normalize = (value, caseSensitive) => {
       const trimmed = String(value ?? "").trim();
@@ -304,6 +304,27 @@ export function gradeAutomaticActivity(activity, response) {
   }
 
   throw new HttpError(400, "This activity is not automatically graded");
+}
+
+export function gradeAutomaticActivity(activity, response) {
+  if (activity.type === "COMPOSITE") {
+    return (activity.content?.modules ?? []).reduce(
+      (total, module) => {
+        if (!["QUESTIONS", "INCORRECT_SECTION", "CASE_STUDY", "TRUE_FALSE", "MATCHING", "ORDERING", "FILL_BLANKS"].includes(module.type)) {
+          return total;
+        }
+        const result = gradeAutomaticContent(
+          module.type,
+          module.content,
+          response?.modules?.[module.id]
+        );
+        return { score: total.score + result.score, maxScore: total.maxScore + result.maxScore };
+      },
+      { score: 0, maxScore: 0 }
+    );
+  }
+
+  return gradeAutomaticContent(activity.type, activity.content, response, activity.points || 1);
 }
 
 export async function recordGrade(attempt, score, maxScore, assignedById = null) {

@@ -46,7 +46,7 @@ export default function InstructorDashboardPage() {
   }
 
   async function deleteCourse(course) {
-    if (!window.confirm(`Delete "${course.title}"?`)) return;
+    if (!window.confirm(`¿Eliminar “${course.title}”?`)) return;
     try {
       await api(`/courses/${course.id}`, { method: "DELETE" });
       load();
@@ -58,30 +58,30 @@ export default function InstructorDashboardPage() {
   return (
     <div className="container-page py-10">
       <PageHeading
-        eyebrow="Instructor workspace"
-        title="Course management"
-        description="Create courses and build the exact block, topic, and activity sequence students must complete."
+        eyebrow="Espacio del instructor"
+        title="Administración de cursos"
+        description="Crea cursos y define la secuencia exacta de bloques, lecciones y actividades que completarán los estudiantes."
         actions={
           <>
-            <DisabledButton>Duplicate course</DisabledButton>
-            <button type="button" className="btn-primary" onClick={() => setShowForm((value) => !value)}><Plus size={16} /> New course</button>
+            <DisabledButton>Duplicar curso</DisabledButton>
+            <button type="button" className="btn-primary" onClick={() => setShowForm((value) => !value)}><Plus size={16} /> Nuevo curso</button>
           </>
         }
       />
       {error && <p className="mt-5 rounded-md border border-error bg-error/10 p-4 text-sm text-error">{error}</p>}
       {showForm && (
         <form onSubmit={createCourse} className="panel mt-6 grid gap-4 p-6 md:grid-cols-2">
-          <Field label="Title" value={form.title} onChange={(value) => setForm({ ...form, title: value })} />
-          <Field label="Category" value={form.category} onChange={(value) => setForm({ ...form, category: value })} />
+          <Field label="Título" value={form.title} onChange={(value) => setForm({ ...form, title: value })} />
+          <Field label="Categoría" value={form.category} onChange={(value) => setForm({ ...form, category: value })} />
           <label className="md:col-span-2">
-            <span className="mb-2 block text-sm font-semibold">Description</span>
+            <span className="mb-2 block text-sm font-semibold">Descripción</span>
             <textarea className="input-field min-h-28" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} required />
           </label>
-          <label><span className="mb-2 block text-sm font-semibold">Difficulty</span><select className="input-field" value={form.difficulty} onChange={(event) => setForm({ ...form, difficulty: event.target.value })}><option>BEGINNER</option><option>INTERMEDIATE</option><option>ADVANCED</option></select></label>
-          <Field label="Duration in minutes" type="number" value={form.durationMinutes} onChange={(value) => setForm({ ...form, durationMinutes: Number(value) })} />
-          <Field label="Passing grade" type="number" value={form.passingGrade} onChange={(value) => setForm({ ...form, passingGrade: Number(value) })} />
-          <label className="flex items-center gap-3 pt-7 text-sm font-semibold"><input type="checkbox" checked={form.certificateEnabled} onChange={(event) => setForm({ ...form, certificateEnabled: event.target.checked })} className="accent-primary" /> Enable certificate</label>
-          <button className="btn-primary md:col-span-2" type="submit"><BookOpen size={16} /> Create draft course</button>
+          <label><span className="mb-2 block text-sm font-semibold">Dificultad</span><select className="input-field" value={form.difficulty} onChange={(event) => setForm({ ...form, difficulty: event.target.value })}><option value="BEGINNER">Principiante</option><option value="INTERMEDIATE">Intermedio</option><option value="ADVANCED">Avanzado</option></select></label>
+          <Field label="Duración en minutos" type="number" value={form.durationMinutes} onChange={(value) => setForm({ ...form, durationMinutes: Number(value) })} />
+          <Field label="Calificación mínima" type="number" value={form.passingGrade} onChange={(value) => setForm({ ...form, passingGrade: Number(value) })} />
+          <label className="flex items-center gap-3 pt-7 text-sm font-semibold"><input type="checkbox" checked={form.certificateEnabled} onChange={(event) => setForm({ ...form, certificateEnabled: event.target.checked })} className="accent-primary" /> Habilitar certificado</label>
+          <button className="btn-primary md:col-span-2" type="submit"><BookOpen size={16} /> Crear curso como borrador</button>
         </form>
       )}
       <section className="mt-8">
@@ -96,22 +96,22 @@ export default function InstructorDashboardPage() {
                 <h2 className="mt-4 text-xl font-bold">{course.title}</h2>
                 <p className="mt-2 line-clamp-3 text-sm leading-6 text-text-secondary">{course.description}</p>
                 <p className="mt-3 rounded-md bg-surface-muted px-3 py-2 text-xs text-text-secondary">
-                  Access: {course.accessType === "ROLE"
-                    ? `Role · ${course.accessRole?.displayName ?? "Not configured"}`
+                  Acceso: {course.accessType === "ROLE"
+                    ? `Rol · ${course.accessRole?.displayName ?? "Sin configurar"}`
                     : course.accessType === "ORGANIZATION"
-                      ? `Organization · ${course.accessOrganization?.name ?? "Not configured"}`
-                      : `${course._count.accessUsers} selected users`}
+                      ? `Organización · ${course.accessOrganization?.name ?? "Sin configurar"}`
+                      : `${course._count.accessUsers} personas seleccionadas`}
                 </p>
                 <dl className="mt-5 grid grid-cols-2 gap-3 text-xs text-text-secondary">
-                  <div><dt>Blocks</dt><dd className="mt-1 font-bold text-text-primary">{course._count.blocks}</dd></div>
-                  <div><dt>Enrollments</dt><dd className="mt-1 font-bold text-text-primary">{course._count.enrollments}</dd></div>
+                  <div><dt>Bloques</dt><dd className="mt-1 font-bold text-text-primary">{course._count.blocks}</dd></div>
+                  <div><dt>Inscripciones</dt><dd className="mt-1 font-bold text-text-primary">{course._count.enrollments}</dd></div>
                 </dl>
-                <Link to={`/courses/${course.id}/builder`} className="btn-primary mt-5 w-full"><Wrench size={16} /> Open course builder</Link>
+                <Link to={`/courses/${course.id}/builder`} className="btn-primary mt-5 w-full"><Wrench size={16} /> Abrir constructor</Link>
               </article>
             ))}
           </div>
         ) : (
-          <EmptyState title="No courses yet" description="Create the first real course. The database currently contains no sample catalog." action={<button type="button" className="btn-primary" onClick={() => setShowForm(true)}><Plus size={16} /> Create course</button>} />
+          <EmptyState title="Aún no hay cursos" description="Crea el primer curso para comenzar a construir el catálogo." action={<button type="button" className="btn-primary" onClick={() => setShowForm(true)}><Plus size={16} /> Crear curso</button>} />
         )}
       </section>
     </div>

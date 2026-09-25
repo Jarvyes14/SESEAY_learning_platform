@@ -21,6 +21,59 @@ import { idParamSchema } from "../validation/common.js";
 const router = Router();
 router.use(requireAuth);
 
+const automaticallyGradedTypes = [
+  "QUESTIONS",
+  "INCORRECT_SECTION",
+  "FINAL_EXAM",
+  "CASE_STUDY",
+  "TRUE_FALSE",
+  "MATCHING",
+  "ORDERING",
+  "FILL_BLANKS"
+];
+
+function validateAutomaticResponse(type, content, response) {
+  if (["QUESTIONS", "FINAL_EXAM", "CASE_STUDY"].includes(type)) {
+    const questions = content?.questions ?? [];
+    const answers = response?.answers;
+    if (!Array.isArray(answers) || answers.length !== questions.length || answers.some((answer) => !Number.isInteger(answer))) {
+      throw new HttpError(400, "Every question must have a submitted answer");
+    }
+  }
+  if (type === "TRUE_FALSE") {
+    const answers = response?.answers;
+    if (!Array.isArray(answers) || answers.length !== (content?.statements ?? []).length || answers.some((answer) => typeof answer !== "boolean")) {
+      throw new HttpError(400, "Every statement must have a true or false answer");
+    }
+  }
+  if (type === "MATCHING") {
+    const matches = response?.matches;
+    if (!Array.isArray(matches) || matches.length !== (content?.pairs ?? []).length || matches.some((answer) => !Number.isInteger(answer))) {
+      throw new HttpError(400, "Every concept must have a selected match");
+    }
+  }
+  if (type === "ORDERING") {
+    const order = response?.order;
+    const expectedLength = (content?.items ?? []).length;
+    if (!Array.isArray(order) || order.length !== expectedLength || new Set(order).size !== expectedLength || order.some((item) => !Number.isInteger(item) || item < 0 || item >= expectedLength)) {
+      throw new HttpError(400, "Submit every item in a valid order");
+    }
+  }
+  if (type === "FILL_BLANKS") {
+    const answers = response?.answers;
+    if (!Array.isArray(answers) || answers.length !== (content?.sentences ?? []).length || answers.some((answer) => typeof answer !== "string" || !answer.trim())) {
+      throw new HttpError(400, "Complete every blank");
+    }
+  }
+  if (type === "INCORRECT_SECTION") {
+    const selected = response?.selectedIndices;
+    const sectionCount = (content?.sections ?? []).length;
+    if (!Array.isArray(selected) || new Set(selected).size !== selected.length || selected.some((item) => !Number.isInteger(item) || item < 0 || item >= sectionCount)) {
+      throw new HttpError(400, "Submit a valid error selection");
+    }
+  }
+}
+
 router.get(
   "/",
   asyncHandler(async (req, res) => {
@@ -173,6 +226,55 @@ router.post(
 );
 
 router.post(
+  "/activities/:id/composite",
+  validate(idParamSchema, "params"),
+  validate(z.object({ responses: z.record(z.unknown()) })),
+  asyncHandler(async (req, res) => {
+    const progress = await requireAccessibleProgress(req.user.id, req.params.id);
+    const activity = progress.activity;
+    if (activity.type !== "COMPOSITE") throw new HttpError(400, "Not a modular activity");
+
+    const modules = activity.content?.modules ?? [];
+    const scoredModules = modules.filter((module) => automaticallyGradedTypes.includes(module.type));
+    for (const module of scoredModules) {
+      validateAutomaticResponse(module.type, module.content, req.body.responses[module.id]);
+    }
+
+    if (!scoredModules.length) {
+      return res.json({ data: await completeActivity(progress.id) });
+    }
+
+    const attempts = await prisma.activityAttempt.count({
+      where: { enrollmentId: progress.enrollmentId, activityId: activity.id }
+    });
+    if (activity.maxAttempts && attempts >= activity.maxAttempts) {
+      throw new HttpError(409, "Maximum attempts reached");
+    }
+    const response = { modules: req.body.responses };
+    const { score, maxScore } = gradeAutomaticActivity(activity, response);
+    const attempt = await prisma.activityAttempt.create({
+      data: {
+        enrollmentId: progress.enrollmentId,
+        activityId: activity.id,
+        studentId: req.user.id,
+        attemptNumber: attempts + 1,
+        response,
+        score,
+        maxScore,
+        status: "GRADED",
+        gradedAt: new Date()
+      },
+      include: {
+        activity: { include: { topic: { include: { block: true } } } }
+      }
+    });
+    await recordGrade(attempt, score, maxScore);
+    await completeActivity(progress.id);
+    res.status(201).json({ data: attempt });
+  })
+);
+
+router.post(
   "/activities/:id/attempts",
   validate(idParamSchema, "params"),
   validate(z.object({ response: z.record(z.unknown()) })),
@@ -209,54 +311,8 @@ router.post(
       );
       if (missing) throw new HttpError(400, `Required assignment field missing: ${missing.label}`);
     }
-    if (["QUESTIONS", "FINAL_EXAM", "CASE_STUDY"].includes(activity.type)) {
-      const questions = activity.content?.questions ?? [];
-      const answers = req.body.response?.answers;
-      if (!Array.isArray(answers) || answers.length !== questions.length || answers.some((answer) => !Number.isInteger(answer))) {
-        throw new HttpError(400, "Every question must have a submitted answer");
-      }
-    }
-    if (activity.type === "TRUE_FALSE") {
-      const answers = req.body.response?.answers;
-      if (
-        !Array.isArray(answers) ||
-        answers.length !== (activity.content?.statements ?? []).length ||
-        answers.some((answer) => typeof answer !== "boolean")
-      ) {
-        throw new HttpError(400, "Every statement must have a true or false answer");
-      }
-    }
-    if (activity.type === "MATCHING") {
-      const matches = req.body.response?.matches;
-      if (
-        !Array.isArray(matches) ||
-        matches.length !== (activity.content?.pairs ?? []).length ||
-        matches.some((answer) => !Number.isInteger(answer))
-      ) {
-        throw new HttpError(400, "Every concept must have a selected match");
-      }
-    }
-    if (activity.type === "ORDERING") {
-      const order = req.body.response?.order;
-      const expectedLength = (activity.content?.items ?? []).length;
-      if (
-        !Array.isArray(order) ||
-        order.length !== expectedLength ||
-        new Set(order).size !== expectedLength ||
-        order.some((item) => !Number.isInteger(item) || item < 0 || item >= expectedLength)
-      ) {
-        throw new HttpError(400, "Submit every item in a valid order");
-      }
-    }
-    if (activity.type === "FILL_BLANKS") {
-      const answers = req.body.response?.answers;
-      if (
-        !Array.isArray(answers) ||
-        answers.length !== (activity.content?.sentences ?? []).length ||
-        answers.some((answer) => typeof answer !== "string")
-      ) {
-        throw new HttpError(400, "Complete every blank");
-      }
+    if (automaticallyGradedTypes.includes(activity.type)) {
+      validateAutomaticResponse(activity.type, activity.content, req.body.response);
     }
     const attempt = await prisma.activityAttempt.create({
       data: {

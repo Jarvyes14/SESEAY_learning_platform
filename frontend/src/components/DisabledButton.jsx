@@ -1,4 +1,4 @@
-export default function DisabledButton({ children, title = "Not implemented in this MVP" }) {
+export default function DisabledButton({ children, title = "No disponible en esta versión" }) {
   return (
     <button
       type="button"
@@ -10,4 +10,3 @@ export default function DisabledButton({ children, title = "Not implemented in t
     </button>
   );
 }
-

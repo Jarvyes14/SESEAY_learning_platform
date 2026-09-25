@@ -54,24 +54,20 @@ export async function assertCourseAccess(user, courseId) {
   return course;
 }
 
-export function sanitizeActivity(activity, canEdit) {
-  if (
-    canEdit ||
-    ![
-      "QUESTIONS",
-      "FINAL_EXAM",
-      "INCORRECT_SECTION",
-      "CASE_STUDY",
-      "TRUE_FALSE",
-      "MATCHING",
-      "ORDERING",
-      "FILL_BLANKS"
-    ].includes(activity.type)
-  ) {
-    return activity;
-  }
+const protectedTypes = [
+  "QUESTIONS",
+  "FINAL_EXAM",
+  "INCORRECT_SECTION",
+  "CASE_STUDY",
+  "TRUE_FALSE",
+  "MATCHING",
+  "ORDERING",
+  "FILL_BLANKS"
+];
 
-  const content = structuredClone(activity.content ?? {});
+function sanitizeContent(type, source) {
+  const content = structuredClone(source ?? {});
+  if (!protectedTypes.includes(type)) return content;
   if (Array.isArray(content.questions)) {
     content.questions = content.questions.map(({ correctIndex, ...question }) => question);
   }
@@ -97,6 +93,22 @@ export function sanitizeActivity(activity, canEdit) {
   if (Array.isArray(content.sentences)) {
     content.sentences = content.sentences.map(({ answer, caseSensitive, ...sentence }) => sentence);
   }
+  return content;
+}
+
+export function sanitizeActivity(activity, canEdit) {
+  if (canEdit) return activity;
+
+  const content = activity.type === "COMPOSITE"
+    ? {
+        ...(activity.content ?? {}),
+        modules: (activity.content?.modules ?? []).map((module) => ({
+          ...module,
+          content: sanitizeContent(module.type, module.content)
+        }))
+      }
+    : sanitizeContent(activity.type, activity.content);
+
   const attempts = activity.attempts?.map((attempt) => {
     if (!["QUESTIONS", "FINAL_EXAM", "CASE_STUDY"].includes(activity.type)) return attempt;
     const answers = attempt.response?.answers ?? [];
