@@ -28,14 +28,14 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <main className="min-h-screen bg-background p-8">
+    <main className="min-h-dvh bg-background px-4 py-6 sm:p-8">
       <Logo />
-      <form className="panel mx-auto mt-20 max-w-md p-7" onSubmit={submit}>
+      <form className="panel mx-auto mt-8 max-w-md p-5 sm:mt-16 sm:p-7" onSubmit={submit}>
         <span className="grid size-11 place-items-center rounded-lg bg-primary/10 text-primary"><Mail size={22} /></span>
         <h1 className="mt-5 font-display text-3xl font-bold">Recuperar acceso</h1>
         <p className="mt-2 text-sm text-text-secondary">Ingresa el correo de tu cuenta. Si está activa, enviaremos un enlace de recuperación de un solo uso.</p>
         <label className="mt-6 block">
-          <span className="mb-2 block text-sm font-semibold">Email</span>
+          <span className="mb-2 block text-sm font-semibold">Correo electrónico</span>
           <input className="input-field" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" />
         </label>
         {message && <p className="mt-4 rounded-md border border-success bg-success/10 p-3 text-sm text-success">{message}</p>}

@@ -42,7 +42,7 @@ router.get(
       where: { id: req.params.id },
       include: { topics: { orderBy: { order: "asc" } } }
     });
-    if (!block) throw new HttpError(404, "Block not found");
+    if (!block) throw new HttpError(404, "No se encontró el bloque");
     await assertCourseEditor(req.user, block.courseId);
     res.json({ data: block });
   })
@@ -54,7 +54,7 @@ router.post(
   asyncHandler(async (req, res) => {
     await assertCourseEditor(req.user, req.body.courseId);
     const enrollments = await prisma.enrollment.count({ where: { courseId: req.body.courseId } });
-    if (enrollments) throw new HttpError(409, "Course structure cannot change after enrollment");
+    if (enrollments) throw new HttpError(409, "No se puede cambiar la estructura de un curso que ya tiene inscripciones");
     const order = (await prisma.courseBlock.count({ where: { courseId: req.body.courseId } })) + 1;
     res.status(201).json({
       data: await prisma.courseBlock.create({ data: { ...req.body, order } })
@@ -68,7 +68,7 @@ router.patch(
   validate(input.omit({ courseId: true }).partial()),
   asyncHandler(async (req, res) => {
     const block = await prisma.courseBlock.findUnique({ where: { id: req.params.id } });
-    if (!block) throw new HttpError(404, "Block not found");
+    if (!block) throw new HttpError(404, "No se encontró el bloque");
     await assertCourseEditor(req.user, block.courseId);
     res.json({
       data: await prisma.courseBlock.update({ where: { id: block.id }, data: req.body })
@@ -81,10 +81,10 @@ router.delete(
   validate(idParamSchema, "params"),
   asyncHandler(async (req, res) => {
     const block = await prisma.courseBlock.findUnique({ where: { id: req.params.id } });
-    if (!block) throw new HttpError(404, "Block not found");
+    if (!block) throw new HttpError(404, "No se encontró el bloque");
     await assertCourseEditor(req.user, block.courseId);
     const enrollments = await prisma.enrollment.count({ where: { courseId: block.courseId } });
-    if (enrollments) throw new HttpError(409, "Course structure cannot change after enrollment");
+    if (enrollments) throw new HttpError(409, "No se puede cambiar la estructura de un curso que ya tiene inscripciones");
     await prisma.courseBlock.delete({ where: { id: block.id } });
     res.status(204).send();
   })

@@ -1,30 +1,19 @@
 import { HttpError } from "../lib/http-error.js";
 import { prisma } from "../lib/prisma.js";
-import { ROLES } from "../lib/roles.js";
+import { canAccessCourse } from "../lib/permissions.js";
 
 export async function getCourseOrThrow(courseId, include = undefined) {
   const course = await prisma.course.findUnique({
     where: { id: courseId },
     include
   });
-  if (!course) throw new HttpError(404, "Course not found");
+  if (!course) throw new HttpError(404, "No se encontró el curso");
   return course;
 }
 
 export async function assertCourseEditor(user, courseId) {
   const course = await getCourseOrThrow(courseId);
-  if (
-    user.role.name === ROLES.INSTRUCTOR &&
-    course.instructorId !== user.id
-  ) {
-    throw new HttpError(403, "Instructors may only edit their own courses");
-  }
-  if (
-    user.role.name === ROLES.ORGANIZATION_ADMIN &&
-    course.organizationId !== user.organizationId
-  ) {
-    throw new HttpError(403, "Course is outside your organization");
-  }
+  if (!canAccessCourse(user, course)) throw new HttpError(403, "El curso está fuera de tu alcance de acceso");
   return course;
 }
 
@@ -50,7 +39,7 @@ export async function assertCourseAccess(user, courseId) {
       ...courseAudienceWhere(user)
     }
   });
-  if (!course) throw new HttpError(403, "This course is not available for your account");
+  if (!course) throw new HttpError(403, "Este curso no está disponible para tu cuenta");
   return course;
 }
 
@@ -109,16 +98,29 @@ export function sanitizeActivity(activity, canEdit) {
       }
     : sanitizeContent(activity.type, activity.content);
 
+  const feedbackFor = (type, source, response = {}) => {
+    if (["QUESTIONS", "FINAL_EXAM", "CASE_STUDY"].includes(type)) {
+      return (source?.questions ?? []).map((question, index) => ({ selectedIndex: response.answers?.[index], correctIndex: question.correctIndex, correct: response.answers?.[index] === question.correctIndex }));
+    }
+    if (type === "TRUE_FALSE") return (source?.statements ?? []).map((statement, index) => ({ selectedAnswer: response.answers?.[index], correctAnswer: statement.correctAnswer, correct: response.answers?.[index] === statement.correctAnswer }));
+    if (type === "ORDERING") return (response.order ?? []).map((itemId, index) => ({ itemId, correct: itemId === index }));
+    if (type === "MATCHING") return (response.matches ?? []).map((matchId, index) => ({ selectedId: matchId, correct: matchId === index }));
+    if (type === "FILL_BLANKS") return (source?.sentences ?? []).map((sentence, index) => ({ answer: response.answers?.[index], correct: String(response.answers?.[index] ?? "").trim().toLocaleLowerCase("es-MX") === String(sentence.answer).trim().toLocaleLowerCase("es-MX") }));
+    if (type === "INCORRECT_SECTION") {
+      const selected = response.selectedIndices ?? [];
+      return (source?.sections ?? []).map((section, index) => ({ selected: selected.includes(index), correct: selected.includes(index) === section.incorrect }));
+    }
+    return null;
+  };
+
   const attempts = activity.attempts?.map((attempt) => {
-    if (!["QUESTIONS", "FINAL_EXAM", "CASE_STUDY"].includes(activity.type)) return attempt;
-    const answers = attempt.response?.answers ?? [];
-    return {
-      ...attempt,
-      feedback: (activity.content?.questions ?? []).map((question, index) => ({
-        selectedIndex: answers[index],
-        correct: answers[index] === question.correctIndex
-      }))
-    };
+    if (activity.type === "COMPOSITE") {
+      return {
+        ...attempt,
+        feedback: Object.fromEntries((activity.content?.modules ?? []).map((module) => [module.id, feedbackFor(module.type, module.content, attempt.response?.modules?.[module.id])]))
+      };
+    }
+    return { ...attempt, feedback: feedbackFor(activity.type, activity.content, attempt.response) };
   });
 
   return { ...activity, content, ...(attempts ? { attempts } : {}) };

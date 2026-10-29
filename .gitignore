@@ -8,3 +8,4 @@ playwright-report/
 playwright-artifacts/
 frontend/.vite/
 backend/prisma/dev.db
+.idea/

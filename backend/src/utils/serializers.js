@@ -1,3 +1,5 @@
+import { permissionsFor, scopeFor } from "../lib/permissions.js";
+
 export function publicUser(user) {
   const serialized = {
     id: user.id,
@@ -7,6 +9,10 @@ export function publicUser(user) {
     isActive: user.isActive,
     mustChangePassword: user.mustChangePassword,
     role: user.role?.name,
+    roleId: user.roleId,
+    roleDisplayName: user.role?.displayName,
+    permissions: permissionsFor(user),
+    permissionScope: scopeFor(user),
     organization: user.organization
       ? {
           id: user.organization.id,

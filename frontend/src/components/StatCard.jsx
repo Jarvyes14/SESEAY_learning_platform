@@ -8,14 +8,14 @@ export default function StatCard({ label, value, detail, icon: Icon, tone = "pri
 
   return (
     <div className="panel p-5">
-      <div className="flex items-start justify-between">
-        <div>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
           <p className="text-sm font-medium text-text-secondary">{label}</p>
           <p className="mt-2 text-3xl font-bold">{value}</p>
           {detail && <p className="mt-2 text-xs text-text-secondary">{detail}</p>}
         </div>
         {Icon && (
-          <span className={`grid size-10 place-items-center rounded-md ${tones[tone]}`}>
+          <span className={`grid size-10 shrink-0 place-items-center rounded-md ${tones[tone]}`}>
             <Icon size={20} />
           </span>
         )}

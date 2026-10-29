@@ -12,8 +12,12 @@ import reportsRouter from "./reports.routes.js";
 import settingsRouter from "./settings.routes.js";
 import topicsRouter from "./topics.routes.js";
 import usersRouter from "./users.routes.js";
+import { enforcePermissions } from "../middleware/permissions.js";
+import rolesRouter from "./roles.routes.js";
 
 const router = Router();
+router.use(enforcePermissions);
+router.use("/roles", rolesRouter);
 
 router.use("/auth", authRouter);
 router.use("/users", usersRouter);

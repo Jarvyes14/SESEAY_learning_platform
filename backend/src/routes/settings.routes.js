@@ -8,6 +8,9 @@ import { allowRoles } from "../middleware/roles.js";
 import { validate } from "../middleware/validate.js";
 import { getPlatformSettings, publicPlatformSettings } from "../services/platform-settings.service.js";
 import { env } from "../config/env.js";
+import { brandingSchema } from "../lib/branding.js";
+import { decodeBrandAsset } from "../services/brand-assets.service.js";
+import { HttpError } from "../lib/http-error.js";
 
 const router = Router();
 const hexColor = z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Usa un color hexadecimal de 6 dígitos");
@@ -23,7 +26,34 @@ router.get(
   })
 );
 
+router.get("/assets/:id", asyncHandler(async (req, res) => {
+  if (!z.string().uuid().safeParse(req.params.id).success) throw new HttpError(404, "Recurso no encontrado");
+  const asset = await prisma.brandAsset.findUnique({ where: { id: req.params.id } });
+  if (!asset) throw new HttpError(404, "Recurso no encontrado");
+  res.set({
+    "Content-Type": asset.mimeType,
+    "Content-Length": String(asset.content.length),
+    "Cache-Control": "public, max-age=31536000, immutable",
+    "Cross-Origin-Resource-Policy": "cross-origin",
+    "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+    "Content-Disposition": `${asset.kind === "document" ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(asset.fileName)}`
+  });
+  res.send(Buffer.from(asset.content));
+}));
+
 router.use(requireAuth, allowRoles(ROLES.PLATFORM_ADMIN));
+
+router.post("/assets", validate(z.object({
+  fileName: z.string().trim().min(1).max(180),
+  mimeType: z.string().max(150),
+  kind: z.enum(["image", "font", "document"]),
+  base64: z.string().min(1).max(5_400_000).regex(/^[A-Za-z0-9+/]*={0,2}$/)
+}).strict()), asyncHandler(async (req, res) => {
+  const content = decodeBrandAsset(req.body);
+  const { kind, mimeType, fileName } = req.body;
+  const asset = await prisma.brandAsset.create({ data: { kind, mimeType, fileName, content }, select: { id: true } });
+  res.status(201).json({ data: { id: asset.id, url: `/api/settings/assets/${asset.id}`, fileName, mimeType } });
+}));
 
 router.get(
   "/",
@@ -46,6 +76,7 @@ router.patch(
       secondaryColor: hexColor.optional(),
       accentColor: hexColor.optional(),
       logoUrl: logoValue.optional(),
+      branding: brandingSchema.optional(),
       supportEmail: z.string().trim().email().nullable().optional(),
       maxActiveSessions: z.number().int().min(1).max(50).optional(),
       passwordMinLength: z.number().int().min(8).max(72).optional(),

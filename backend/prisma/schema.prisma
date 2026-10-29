@@ -68,29 +68,38 @@ enum PasswordTokenPurpose {
 }
 
 model Role {
-  id          String   @id @default(uuid()) @db.Uuid
-  name        String   @unique
-  displayName String
-  users       User[]
-  authorizedEmails AuthorizedEmail[]
-  accessibleCourses Course[] @relation("CourseAccessRole")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                String            @id @default(uuid()) @db.Uuid
+  name              String            @unique
+  displayName       String
+  description       String?
+  permissions       String[]          @default([])
+  scope             String            @default("OWN")
+  isSystem          Boolean           @default(false)
+    createdById       String?           @db.Uuid
+    organizationId    String?           @db.Uuid
+    createdBy         User?             @relation("RoleCreator", fields: [createdById], references: [id], onDelete: SetNull)
+    organization      Organization?     @relation("ManagedRoles", fields: [organizationId], references: [id], onDelete: SetNull)
+  users             User[]
+  authorizedEmails  AuthorizedEmail[]
+  accessibleCourses Course[]          @relation("CourseAccessRole")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 }
 
 model Organization {
-  id              String        @id @default(uuid()) @db.Uuid
-  name            String
-  institutionName String?
-  slug            String        @unique
-  users           User[]
-  authorizedEmails AuthorizedEmail[]
-  courses         Course[] @relation("CourseOwnerOrganization")
-  accessibleCourses Course[] @relation("CourseAccessOrganization")
-  enrollments     Enrollment[]
-  certificates    Certificate[]
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  id                String            @id @default(uuid()) @db.Uuid
+  name              String
+  institutionName   String?
+  slug              String            @unique
+  managedRoles      Role[]            @relation("ManagedRoles")
+  users             User[]
+  authorizedEmails  AuthorizedEmail[]
+  courses           Course[]          @relation("CourseOwnerOrganization")
+  accessibleCourses Course[]          @relation("CourseAccessOrganization")
+  enrollments       Enrollment[]
+  certificates      Certificate[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 }
 
 model AuthorizedEmail {
@@ -110,30 +119,32 @@ model AuthorizedEmail {
 }
 
 model User {
-  id                 String             @id @default(uuid()) @db.Uuid
-  email              String             @unique
-  passwordHash       String
-  firstName          String
-  lastName           String
-  isActive           Boolean            @default(true)
-  mustChangePassword Boolean            @default(false)
-  roleId             String             @db.Uuid
-  organizationId     String?            @db.Uuid
-  role               Role               @relation(fields: [roleId], references: [id])
-  organization       Organization?      @relation(fields: [organizationId], references: [id])
-  instructedCourses  Course[]           @relation("CourseInstructor")
-  enrollments        Enrollment[]
-  activityProgress   ActivityProgress[]
-  activityAttempts   ActivityAttempt[]
-  reviewedAttempts   ActivityAttempt[]  @relation("AttemptReviewer")
-  grades             Grade[]            @relation("StudentGrades")
-  assignedGrades     Grade[]            @relation("GradeAssigner")
-  certificates       Certificate[]
-  sessions           Session[]
-  passwordTokens     PasswordToken[]
-  courseAccess       CourseAccessUser[]
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
+  id                   String                @id @default(uuid()) @db.Uuid
+  email                String                @unique
+  passwordHash         String
+  firstName            String
+  lastName             String
+  isActive             Boolean               @default(true)
+  mustChangePassword   Boolean               @default(false)
+  roleId               String                @db.Uuid
+  organizationId       String?               @db.Uuid
+  role                 Role                  @relation(fields: [roleId], references: [id])
+  createdRoles         Role[]                @relation("RoleCreator")
+  organization         Organization?         @relation(fields: [organizationId], references: [id])
+  instructedCourses    Course[]              @relation("CourseInstructor")
+  enrollments          Enrollment[]
+  activityProgress     ActivityProgress[]
+  activityAttempts     ActivityAttempt[]
+  reviewedAttempts     ActivityAttempt[]     @relation("AttemptReviewer")
+  grades               Grade[]               @relation("StudentGrades")
+  assignedGrades       Grade[]               @relation("GradeAssigner")
+  certificates         Certificate[]
+  certificateTemplates CertificateTemplate[] @relation("CertificateTemplateCreator")
+  sessions             Session[]
+  passwordTokens       PasswordToken[]
+  courseAccess         CourseAccessUser[]
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
 
   @@index([roleId])
   @@index([organizationId])
@@ -155,12 +166,13 @@ model PasswordToken {
 
 model PlatformSettings {
   id                         String   @id @default("global")
-  platformName               String   @default("Integrity Learning")
+  platformName               String   @default("Plataforma de aprendizaje")
   platformSubtitle           String   @default("Academia de Servicio Público")
   primaryColor               String   @default("#1F4E79")
   secondaryColor             String   @default("#2D6053")
   accentColor                String   @default("#AE792D")
   logoUrl                    String?
+  branding                   Json     @default("{}")
   supportEmail               String?
   maxActiveSessions          Int      @default(5)
   passwordMinLength          Int      @default(12)
@@ -171,6 +183,15 @@ model PlatformSettings {
   passwordResetExpiryMinutes Int      @default(60)
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
+}
+
+model BrandAsset {
+  id        String   @id @default(uuid()) @db.Uuid
+  fileName  String
+  mimeType  String
+  kind      String
+  content   Bytes
+  createdAt DateTime @default(now())
 }
 
 model Session {
@@ -191,45 +212,48 @@ model Session {
 }
 
 model Course {
-  id                 String           @id @default(uuid()) @db.Uuid
-  title              String
-  slug               String           @unique
-  description        String
-  category           String
-  difficulty         CourseDifficulty @default(BEGINNER)
-  durationMinutes    Int
-  passingGrade       Float            @default(70)
-  status             CourseStatus     @default(DRAFT)
-  certificateEnabled Boolean          @default(false)
-  accessType         CourseAccessType @default(ROLE)
-  accessRoleId       String?          @db.Uuid
-  accessOrganizationId String?        @db.Uuid
-  instructorId       String?          @db.Uuid
-  organizationId     String?          @db.Uuid
-  instructor         User?            @relation("CourseInstructor", fields: [instructorId], references: [id])
-  organization       Organization?    @relation("CourseOwnerOrganization", fields: [organizationId], references: [id])
-  accessRole         Role?            @relation("CourseAccessRole", fields: [accessRoleId], references: [id])
-  accessOrganization Organization?    @relation("CourseAccessOrganization", fields: [accessOrganizationId], references: [id])
-  accessUsers        CourseAccessUser[]
-  blocks             CourseBlock[]
-  enrollments        Enrollment[]
-  grades             Grade[]
-  certificates       Certificate[]
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
+  id                    String               @id @default(uuid()) @db.Uuid
+  title                 String
+  slug                  String               @unique
+  description           String
+  category              String
+  difficulty            CourseDifficulty     @default(BEGINNER)
+  durationMinutes       Int
+  passingGrade          Float                @default(70)
+  status                CourseStatus         @default(DRAFT)
+  certificateEnabled    Boolean              @default(false)
+  certificateTemplateId String?              @db.Uuid
+  accessType            CourseAccessType     @default(ROLE)
+  accessRoleId          String?              @db.Uuid
+  accessOrganizationId  String?              @db.Uuid
+  instructorId          String?              @db.Uuid
+  organizationId        String?              @db.Uuid
+  instructor            User?                @relation("CourseInstructor", fields: [instructorId], references: [id])
+  organization          Organization?        @relation("CourseOwnerOrganization", fields: [organizationId], references: [id])
+  accessRole            Role?                @relation("CourseAccessRole", fields: [accessRoleId], references: [id])
+  accessOrganization    Organization?        @relation("CourseAccessOrganization", fields: [accessOrganizationId], references: [id])
+  accessUsers           CourseAccessUser[]
+  blocks                CourseBlock[]
+  enrollments           Enrollment[]
+  grades                Grade[]
+  certificates          Certificate[]
+  certificateTemplate   CertificateTemplate? @relation(fields: [certificateTemplateId], references: [id], onDelete: SetNull)
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
 
   @@index([instructorId])
   @@index([organizationId])
   @@index([accessRoleId])
   @@index([accessOrganizationId])
+  @@index([certificateTemplateId])
   @@index([status])
 }
 
 model CourseAccessUser {
-  courseId String @db.Uuid
-  userId   String @db.Uuid
-  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId  String   @db.Uuid
+  userId    String   @db.Uuid
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 
   @@id([courseId, userId])
@@ -323,6 +347,7 @@ model ActivityProgress {
   timeSpentSeconds     Int            @default(0)
   watchedSeconds       Float          @default(0)
   videoDurationSeconds Float?
+  moduleProgress       Json           @default("{}")
   confirmed            Boolean        @default(false)
   enrollment           Enrollment     @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
   student              User           @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -401,21 +426,41 @@ model Grade {
 }
 
 model Certificate {
-  id              String        @id @default(uuid()) @db.Uuid
-  enrollmentId    String        @unique @db.Uuid
-  studentId       String        @db.Uuid
-  courseId        String        @db.Uuid
-  organizationId  String?       @db.Uuid
-  certificateId   String        @unique
-  studentName     String
-  courseName      String
-  institutionName String
-  completionDate  DateTime
-  finalGrade      Float
-  issuedAt        DateTime      @default(now())
-  revokedAt       DateTime?
-  enrollment      Enrollment    @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
-  student         User          @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  course          Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  organization    Organization? @relation(fields: [organizationId], references: [id])
+  id               String        @id @default(uuid()) @db.Uuid
+  enrollmentId     String        @unique @db.Uuid
+  studentId        String        @db.Uuid
+  courseId         String        @db.Uuid
+  organizationId   String?       @db.Uuid
+  certificateId    String        @unique
+  studentName      String
+  courseName       String
+  institutionName  String
+  completionDate   DateTime
+  finalGrade       Float
+  templateSnapshot Json?
+  issuedAt         DateTime      @default(now())
+  revokedAt        DateTime?
+  enrollment       Enrollment    @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  student          User          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  course           Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  organization     Organization? @relation(fields: [organizationId], references: [id])
+}
+
+model CertificateTemplate {
+  id              String   @id @default(uuid()) @db.Uuid
+  name            String
+  backgroundImage String
+  nameX           Float    @default(50)
+  nameY           Float    @default(52)
+  nameWidth       Float    @default(60)
+  fontSize        Int      @default(42)
+  textColor       String   @default("#1F2937")
+  fontFamily      String   @default("serif")
+  createdById     String   @db.Uuid
+  createdBy       User     @relation("CertificateTemplateCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  courses         Course[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([createdById])
 }

@@ -1,3 +1,5 @@
+import { scopeFor, organizationScope } from "../lib/permissions.js";
+import { HttpError } from "../lib/http-error.js";
 import { Router } from "express";
 import { z } from "zod";
 import { asyncHandler } from "../lib/async-handler.js";
@@ -16,8 +18,8 @@ router.get(
   allowRoles(...PLATFORM_ROLES, ROLES.ORGANIZATION_ADMIN),
   asyncHandler(async (req, res) => {
     const where =
-      req.user.role.name === ROLES.ORGANIZATION_ADMIN
-        ? { id: req.user.organizationId }
+      scopeFor(req.user) !== "GLOBAL"
+        ? { id: req.user.organizationId ?? "00000000-0000-0000-0000-000000000000" }
         : {};
     res.json({
       data: await prisma.organization.findMany({
@@ -40,6 +42,7 @@ router.post(
     })
   ),
   asyncHandler(async (req, res) => {
+    if (scopeFor(req.user) !== "GLOBAL") throw new HttpError(403, "Crear organizaciones requiere alcance de toda la plataforma");
     res.status(201).json({ data: await prisma.organization.create({ data: req.body }) });
   })
 );
@@ -55,6 +58,7 @@ router.patch(
     })
   ),
   asyncHandler(async (req, res) => {
+    if (scopeFor(req.user) !== "GLOBAL" && req.params.id !== organizationScope(req.user)) throw new HttpError(403, "La organización esta fuera de tu alcance");
     res.json({
       data: await prisma.organization.update({ where: { id: req.params.id }, data: req.body })
     });
@@ -66,6 +70,7 @@ router.delete(
   allowRoles(ROLES.PLATFORM_ADMIN),
   validate(idParamSchema, "params"),
   asyncHandler(async (req, res) => {
+    if (scopeFor(req.user) !== "GLOBAL" && req.params.id !== organizationScope(req.user)) throw new HttpError(403, "La organización esta fuera de tu alcance");
     await prisma.organization.delete({ where: { id: req.params.id } });
     res.status(204).send();
   })

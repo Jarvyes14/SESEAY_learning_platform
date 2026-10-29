@@ -1,14 +1,12 @@
+import { BUILTIN_PERMISSIONS, BUILTIN_SCOPES } from "../src/lib/permissions.js";
 import bcrypt from "bcrypt";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
 const roles = [
-  ["platform_admin", "Platform administrator"],
-  ["government_admin", "Government administrator"],
-  ["organization_admin", "Organization administrator"],
-  ["instructor", "Instructor"],
-  ["student", "Student"]
+  ["platform_admin", "Administrador de plataforma"],
+  ["student", "Participante"]
 ];
 
 async function main() {
@@ -16,8 +14,8 @@ async function main() {
   for (const [name, displayName] of roles) {
     createdRoles[name] = await prisma.role.upsert({
       where: { name },
-      update: { displayName },
-      create: { name, displayName }
+      update: {},
+      create: { name, displayName, isSystem: true, permissions: BUILTIN_PERMISSIONS[name], scope: BUILTIN_SCOPES[name] }
     });
   }
 
@@ -42,8 +40,8 @@ async function main() {
       data: {
         email,
         passwordHash: await bcrypt.hash(password, 12),
-        firstName: "Platform",
-        lastName: "Administrator",
+        firstName: "Administración",
+        lastName: "Plataforma",
         roleId: createdRoles.platform_admin.id
       }
     });
@@ -160,7 +158,7 @@ async function main() {
                           title: "La jerarquía del curso",
                           instructions: "Revisa cómo se organiza un curso dentro de la plataforma.",
                           type: "READING",
-                          content: { body: "La plataforma organiza cada curso en tres niveles. Los bloques reúnen grandes unidades o etapas. Dentro de cada bloque, las lecciones desarrollan una idea concreta. Finalmente, las actividades presentan el contenido o solicitan una práctica. El estudiante avanza en el orden definido: al completar una actividad se habilita la siguiente. Por eso conviene crear lecciones breves, alternar explicación y práctica, y reservar el examen final para el cierre. Una estructura clara reduce la carga cognitiva y facilita localizar cualquier elemento en el constructor." },
+                          content: { body: "La plataforma organiza cada curso en tres niveles. Los bloques reúnen grandes unidades o etapas. Dentro de cada bloque, las lecciones desarrollan una idea concreta. Finalmente, las actividades presentan el contenido o solicitan una práctica. El participante avanza en el orden definido: al completar una actividad se habilita la siguiente. Por eso conviene crear lecciones breves, alternar explicación y práctica, y reservar el examen final para el cierre. Una estructura clara reduce la carga cognitiva y facilita localizar cualquier elemento en el constructor." },
                           minimumReadSeconds: 15
                         },
                         {
@@ -274,7 +272,7 @@ async function main() {
                             { text: "Cada actividad se relaciona con un objetivo de aprendizaje.", incorrect: false },
                             { text: "El curso se publica vacío para completarlo después.", incorrect: true },
                             { text: "La audiencia se revisa antes de publicar.", incorrect: false },
-                            { text: "Todas las preguntas muestran su respuesta correcta al estudiante.", incorrect: true }
+                            { text: "Todas las preguntas muestran su respuesta correcta al participante.", incorrect: true }
                           ] },
                           points: 4,
                           maxAttempts: 3
@@ -301,7 +299,7 @@ async function main() {
                           title: "Tres maneras de asignar audiencia",
                           instructions: "Lee cuidadosamente las diferencias antes de elegir una opción.",
                           type: "READING",
-                          content: { body: "La configuración de acceso ofrece tres modalidades excluyentes. Rol permite que todas las cuentas con un rol determinado encuentren el curso; resulta útil para cursos generales dirigidos, por ejemplo, a todos los estudiantes. Organización limita el curso a las personas que pertenecen a una institución concreta. Usuarios permite seleccionar cuentas individuales cuando la capacitación debe dirigirse a un grupo específico. La audiencia no sustituye la publicación: un curso en borrador permanece oculto aunque tenga una regla configurada. Revisa siempre la selección antes de cambiar el estado a publicado." },
+                          content: { body: "La configuración de acceso ofrece tres modalidades excluyentes. Rol permite que todas las cuentas con un rol determinado encuentren el curso; resulta útil para cursos generales dirigidos, por ejemplo, a todos los participantes. Organización limita el curso a las personas que pertenecen a una institución concreta. Usuarios permite seleccionar cuentas individuales cuando la capacitación debe dirigirse a un grupo específico. La audiencia no sustituye la publicación: un curso en borrador permanece oculto aunque tenga una regla configurada. Revisa siempre la selección antes de cambiar el estado a publicado." },
                           minimumReadSeconds: 15
                         },
                         {
@@ -349,7 +347,7 @@ async function main() {
                             { prompt: "¿Qué acceso usarías para una sola institución?", options: ["Rol", "Organización", "Usuarios sin seleccionar"], correctIndex: 1, points: 2 },
                             { prompt: "¿Qué debe existir antes de publicar?", options: ["Al menos una actividad", "Un certificado emitido", "Una cuenta desactivada"], correctIndex: 0, points: 2 },
                             { prompt: "¿Qué ejercicio permite evaluar una decisión contextual?", options: ["Caso práctico", "Enlace externo", "Texto informativo"], correctIndex: 0, points: 2 },
-                            { prompt: "¿Quién elige la audiencia del curso?", options: ["El constructor autorizado", "Cada estudiante", "El navegador"], correctIndex: 0, points: 2 }
+                            { prompt: "¿Quién elige la audiencia del curso?", options: ["El constructor autorizado", "Cada participante", "El navegador"], correctIndex: 0, points: 2 }
                           ] },
                           points: 10,
                           maxAttempts: 3

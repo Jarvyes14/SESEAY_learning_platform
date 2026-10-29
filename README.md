@@ -20,6 +20,16 @@ Servicios incluidos:
 - `postgres`: base de datos PostgreSQL
 - `pgadmin`: opcional, solo para administracion
 
+## Identidad visual y manual de marca
+
+El administrador de plataforma puede abrir `Configuración` y administrar logotipos por instancia y formato, versiones para escritorio y móvil, favicon, dimensiones, espacio de protección y mínimo impreso. También puede editar los colores de toda la interfaz, referencias HEX/RGB/Pantone/CMYK, familias y pesos tipográficos, tamaño base, interlineado, panel de acceso, pie institucional y biblioteca de manuales, retículas, papelería y presentaciones.
+
+La identidad SEAY toma como referencia las variantes, paletas y familias del manual de abril de 2026. Las discrepancias entre HEX y RGB están documentadas en las referencias de color. Los logotipos exportados del PDF pueden sustituirse por archivos originales SVG o PNG. Los cambios de identidad se aplican al guardar la configuración.
+
+Los archivos cargados se guardan en PostgreSQL (`BrandAsset`), por lo que forman parte del respaldo de la base de datos y sobreviven a reconstrucciones de contenedores. Se admiten imágenes de hasta 4 MB, fuentes WOFF/WOFF2/TTF/OTF de hasta 2 MB y recursos PDF/DOCX/PPTX o imágenes de hasta 4 MB. Los archivos de marca son públicos; la carga y los cambios requieren el rol `platform_admin`. Las plantillas subidas conservan sus propios contenidos y tipografías; se pueden descargar y reemplazar desde Configuración.
+
+Inter, Roboto, Montserrat y Source Serif 4 se cargan desde Google Fonts, y pueden sustituirse por archivos propios. Myriad Pro no se distribuye con la plataforma: se debe cargar el archivo autorizado o disponer de ella en el dispositivo. La vista previa no modifica la marca pública hasta guardar.
+
 ## Modulo de cursos
 
 Los administradores e instructores autorizados pueden crear cursos como borrador, organizarlos en bloques y lecciones, agregar contenidos y ejercicios, configurar calificacion y certificados, seleccionar la audiencia y publicarlos.
@@ -30,7 +40,7 @@ La audiencia de un curso puede limitarse a:
 - Una organizacion.
 - Una seleccion de usuarios especificos.
 
-Cualquier cuenta activa puede participar como aprendiz, independientemente de que su rol sea administrador, docente o estudiante. El menu `My learning` muestra exclusivamente los cursos publicados asignados a su rol, organizacion o cuenta; el menu `Courses` permanece separado para la construccion y administracion de contenido.
+Cualquier cuenta activa puede participar como aprendiz, independientemente de que su rol sea administrador, docente o participante. El menu `My learning` muestra exclusivamente los cursos publicados asignados a su rol, organizacion o cuenta; el menu `Courses` permanece separado para la construccion y administracion de contenido.
 
 El `seed` crea de forma idempotente el curso publicado `Tutorial para crear cursos en la plataforma`, con cuatro bloques, ocho lecciones y ejemplos de los contenidos y ejercicios disponibles.
 
@@ -313,6 +323,29 @@ Restaurar respaldo:
 ```bash
 cat backup.sql | docker compose -f docker-compose.prod.yml exec -T postgres psql -U integrity integrity_learning
 ```
+
+## Roles personalizados y permisos
+
+En **Roles y permisos** (`/admin/roles`) la administración puede crear roles con
+nombre, descripción, alcance y una lista de permisos agrupados por módulo. Los
+permisos necesarios para una función se seleccionan automáticamente. Un rol sin
+permisos conserva únicamente el acceso a su cuenta y al cambio de contraseña.
+
+Los roles se asignan desde **Usuarios**, al autorizar un registro o editar una
+cuenta. La API consulta los permisos vigentes en cada solicitud; editar un rol
+actualiza el acceso de sus usuarios sin exigirles iniciar sesión otra vez. La
+interfaz también actualiza los permisos al recuperar el foco de la ventana.
+
+Se permite editar un rol con usuarios asignados. Para eliminarlo se deben
+reasignar sus usuarios y retirar sus referencias en correos autorizados y
+audiencias de cursos. Los roles del sistema están protegidos contra eliminación;
+el administrador de plataforma conserva todos los permisos y su rol está protegido.
+
+El alcance puede ser propio, de organización o global. Los permisos de lectura y
+escritura se aplican en la API y en la interfaz. Nadie puede delegar permisos o un
+alcance superiores a los suyos. La gestión de roles con alcance propio se limita
+a los roles creados por esa cuenta; con alcance de organización, a los creados
+en su organización. La configuración general afecta a toda la plataforma.
 
 ## Rutas internas de produccion
 

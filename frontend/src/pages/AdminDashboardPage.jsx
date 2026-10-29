@@ -1,7 +1,8 @@
-import { Award, BookOpen, Download, GraduationCap, Upload, Users } from "lucide-react";
+import { can } from "../lib/permissions.js";
+import { useAuth } from "../context/AuthContext.jsx";
+import { Award, BookOpen, GraduationCap, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import DisabledButton from "../components/DisabledButton.jsx";
 import PageHeading from "../components/PageHeading.jsx";
 import StatCard from "../components/StatCard.jsx";
 import { api } from "../lib/api.js";
@@ -18,6 +19,7 @@ const emptyOverview = {
 };
 
 export default function AdminDashboardPage() {
+  const { user } = useAuth();
   const [overview, setOverview] = useState(emptyOverview);
   const [error, setError] = useState("");
 
@@ -33,12 +35,7 @@ export default function AdminDashboardPage() {
         eyebrow="Administración de la plataforma"
         title="Panel de administración"
         description="Métricas actuales de usuarios, cursos, inscripciones y certificados registrados en la plataforma."
-        actions={
-          <>
-            <DisabledButton><Upload size={16} /> Importación masiva</DisabledButton>
-            <DisabledButton><Download size={16} /> Exportar reporte</DisabledButton>
-          </>
-        }
+
       />
       {error && <p className="mt-5 rounded-md border border-error bg-error/10 p-4 text-sm text-error">{error}</p>}
       <div className="mt-7 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
@@ -48,21 +45,21 @@ export default function AdminDashboardPage() {
         <StatCard label="Certificados" value={overview.certificates} detail="Emitidos después de aprobar" icon={Award} tone="warning" />
       </div>
       <div className="mt-8 grid gap-6 lg:grid-cols-3">
-        <Link to="/admin/users" className="panel p-6 transition hover:border-primary">
+        {can(user, "users.view") && <Link to="/admin/users" className="panel p-6 transition hover:border-primary">
           <Users className="text-primary" />
           <h2 className="mt-4 text-xl font-bold">Administrar usuarios</h2>
           <p className="mt-2 text-sm leading-6 text-text-secondary">Autoriza cuentas por rol y asigna organizaciones.</p>
-        </Link>
-        <Link to="/instructor" className="panel p-6 transition hover:border-primary">
+        </Link>}
+        {can(user, "courses.view") && <Link to="/instructor" className="panel p-6 transition hover:border-primary">
           <BookOpen className="text-primary" />
           <h2 className="mt-4 text-xl font-bold">Administrar cursos</h2>
           <p className="mt-2 text-sm leading-6 text-text-secondary">Crea cursos y utiliza el constructor completo.</p>
-        </Link>
-        <Link to="/grades" className="panel p-6 transition hover:border-primary">
+        </Link>}
+        {can(user, "grades.view") && <Link to="/grades" className="panel p-6 transition hover:border-primary">
           <GraduationCap className="text-primary" />
           <h2 className="mt-4 text-xl font-bold">Revisar calificaciones</h2>
           <p className="mt-2 text-sm leading-6 text-text-secondary">{overview.pendingReviews} tareas esperan revisión.</p>
-        </Link>
+        </Link>}
       </div>
     </div>
   );

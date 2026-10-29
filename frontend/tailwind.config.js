@@ -20,9 +20,10 @@ export default {
         overlay: "rgb(var(--color-overlay) / <alpha-value>)"
       },
       fontFamily: {
-        sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
-        display: ["Source Serif 4", "Georgia", "serif"]
+        sans: ["var(--font-body, Inter)", "ui-sans-serif", "system-ui", "sans-serif"],
+        display: ["var(--font-heading, 'Source Serif 4')", "Georgia", "serif"]
       },
+      fontWeight: { bold: "var(--font-weight-heading, 700)" },
       boxShadow: {
         panel: "0 8px 24px rgb(var(--color-overlay) / 0.08)",
         focus: "0 0 0 3px rgb(var(--color-primary) / 0.18)"

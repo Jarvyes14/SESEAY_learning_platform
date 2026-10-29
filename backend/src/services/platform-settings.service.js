@@ -1,15 +1,17 @@
 import { randomInt } from "node:crypto";
 import { HttpError } from "../lib/http-error.js";
 import { prisma } from "../lib/prisma.js";
+import { publicBranding } from "../lib/branding.js";
 
 export const defaultPlatformSettings = {
   id: "global",
-  platformName: "Integrity Learning",
+  platformName: "Plataforma de aprendizaje",
   platformSubtitle: "Academia de Servicio Público",
   primaryColor: "#1F4E79",
   secondaryColor: "#2D6053",
   accentColor: "#AE792D",
   logoUrl: null,
+  branding: {},
   supportEmail: null,
   maxActiveSessions: 5,
   passwordMinLength: 12,
@@ -31,27 +33,27 @@ export async function getPlatformSettings(client = prisma) {
 export function passwordPolicyErrors(password, settings) {
   const errors = [];
   if (password.length < settings.passwordMinLength) {
-    errors.push(`Use at least ${settings.passwordMinLength} characters`);
+    errors.push(`Usa al menos ${settings.passwordMinLength} caracteres`);
   }
-  if (password.length > 72) errors.push("Use no more than 72 characters");
+  if (password.length > 72) errors.push("Usa como máximo 72 caracteres");
   if (settings.passwordRequireUppercase && !/[A-Z]/.test(password)) {
-    errors.push("Include an uppercase letter");
+    errors.push("Incluye una letra mayúscula");
   }
   if (settings.passwordRequireLowercase && !/[a-z]/.test(password)) {
-    errors.push("Include a lowercase letter");
+    errors.push("Incluye una letra minúscula");
   }
   if (settings.passwordRequireNumber && !/[0-9]/.test(password)) {
-    errors.push("Include a number");
+    errors.push("Incluye un número");
   }
   if (settings.passwordRequireSpecial && !/[^A-Za-z0-9]/.test(password)) {
-    errors.push("Include a special character");
+    errors.push("Incluye un carácter especial");
   }
   return errors;
 }
 
 export function assertPasswordPolicy(password, settings) {
   const errors = passwordPolicyErrors(password, settings);
-  if (errors.length) throw new HttpError(400, "Password does not meet the platform policy", errors);
+  if (errors.length) throw new HttpError(400, "La contraseña no cumple los requisitos de la plataforma", errors);
 }
 
 export function generateTemporaryPassword(settings) {
@@ -82,6 +84,7 @@ export function publicPlatformSettings(settings) {
     secondaryColor: settings.secondaryColor,
     accentColor: settings.accentColor,
     logoUrl: settings.logoUrl,
+    branding: publicBranding(settings),
     supportEmail: settings.supportEmail,
     passwordPolicy: {
       minLength: settings.passwordMinLength,

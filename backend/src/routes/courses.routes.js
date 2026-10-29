@@ -1,3 +1,4 @@
+import { hasPermission, requirePermission, scopeFor, courseScope, organizationScope, canAccessCourse, templateScope } from "../lib/permissions.js";
 import { Router } from "express";
 import { z } from "zod";
 import { asyncHandler } from "../lib/async-handler.js";
@@ -32,6 +33,7 @@ const courseSchema = z.object({
   passingGrade: z.coerce.number().min(0).max(100),
   status: z.enum(statuses).default("DRAFT"),
   certificateEnabled: z.boolean().default(false),
+  certificateTemplateId: optionalNullableUuid,
   instructorId: optionalNullableUuid,
   organizationId: optionalNullableUuid,
   accessType: z.enum(accessTypes).optional(),
@@ -52,36 +54,36 @@ async function resolveAudience(input, user) {
       accessRoleId = (await prisma.role.findUnique({ where: { name: ROLES.STUDENT } }))?.id;
     }
     if (!accessRoleId || !(await prisma.role.findUnique({ where: { id: accessRoleId } }))) {
-      throw new HttpError(400, "A valid access role is required");
+      throw new HttpError(400, "Selecciona un rol válido para el acceso");
     }
   }
 
   if (accessType === "ORGANIZATION") {
     accessOrganizationId = input.accessOrganizationId;
-    if (!accessOrganizationId) throw new HttpError(400, "An access organization is required");
+    if (!accessOrganizationId) throw new HttpError(400, "Selecciona una organización para el acceso");
     if (
-      user.role.name === ROLES.ORGANIZATION_ADMIN &&
+      scopeFor(user) === "ORGANIZATION" &&
       accessOrganizationId !== user.organizationId
     ) {
-      throw new HttpError(403, "You may only grant access to your organization");
+      throw new HttpError(403, "Solo puedes dar acceso a personas de tu organización");
     }
     if (!(await prisma.organization.findUnique({ where: { id: accessOrganizationId } }))) {
-      throw new HttpError(400, "The access organization does not exist");
+      throw new HttpError(400, "La organización seleccionada para el acceso no existe");
     }
   }
 
   if (accessType === "USERS") {
     accessUserIds = [...new Set(input.accessUserIds ?? [])];
-    if (!accessUserIds.length) throw new HttpError(400, "Select at least one user");
+    if (!accessUserIds.length) throw new HttpError(400, "Selecciona al menos una persona usuaria");
     const where = {
       id: { in: accessUserIds },
       isActive: true,
-      ...(user.role.name === ROLES.ORGANIZATION_ADMIN
+      ...(scopeFor(user) === "ORGANIZATION"
         ? { organizationId: user.organizationId }
         : {})
     };
     if ((await prisma.user.count({ where })) !== accessUserIds.length) {
-      throw new HttpError(400, "One or more selected users are invalid or outside your scope");
+      throw new HttpError(400, "Una o más personas seleccionadas no son válidas o están fuera de tu ámbito de administración");
     }
   }
 
@@ -98,6 +100,15 @@ function slugify(value) {
     .replace(/^-|-$/g, "");
 }
 
+async function validateCertificateTemplate(templateId, user) {
+  if (!templateId) return;
+  const template = await prisma.certificateTemplate.findUnique({ where: { id: templateId } });
+  if (!template) throw new HttpError(400, "La plantilla de certificado no existe");
+  if (!(await prisma.certificateTemplate.findFirst({ where: { id: templateId, ...templateScope(user) } }))) {
+    throw new HttpError(403, "No tienes permiso para usar esta plantilla de certificado");
+  }
+}
+
 router.use(requireAuth);
 
 router.get(
@@ -111,17 +122,10 @@ router.get(
   ),
   asyncHandler(async (req, res) => {
     const { page, limit, search, status, instructorId } = req.validatedQuery;
-    const role = req.user.role.name;
     const where = {
-      ...(role === ROLES.STUDENT
-        ? { status: "PUBLISHED", ...courseAudienceWhere(req.user) }
-        : {}),
-      ...(role === ROLES.INSTRUCTOR ? { instructorId: req.user.id } : {}),
-      ...(role === ROLES.ORGANIZATION_ADMIN
-        ? { organizationId: req.user.organizationId }
-        : {}),
-      ...(status && role !== ROLES.STUDENT ? { status } : {}),
-      ...(instructorId && role !== ROLES.INSTRUCTOR ? { instructorId } : {}),
+      ...courseScope(req.user),
+      ...(status ? { status } : {}),
+      ...(instructorId ? { AND: [{ instructorId }] } : {}),
       ...(search
         ? {
             OR: [
@@ -186,21 +190,26 @@ router.get(
 
 router.get(
   "/audience-options",
+  validate(paginationSchema, "query"),
   allowRoles(...COURSE_EDITOR_ROLES),
   asyncHandler(async (req, res) => {
     const organizationScope =
-      req.user.role.name === ROLES.ORGANIZATION_ADMIN
+      scopeFor(req.user) === "ORGANIZATION"
         ? { id: req.user.organizationId }
         : {};
     const userScope =
-      req.user.role.name === ROLES.ORGANIZATION_ADMIN
+      scopeFor(req.user) === "ORGANIZATION"
         ? { organizationId: req.user.organizationId }
         : {};
-    const [roles, organizations, users] = await prisma.$transaction([
+    const { page, limit, search } = req.validatedQuery;
+    const where = { isActive: true, ...userScope, ...(search ? { OR: [{ email: { contains: search, mode: "insensitive" } }, { firstName: { contains: search, mode: "insensitive" } }, { lastName: { contains: search, mode: "insensitive" } }] } : {}) };
+    const [roles, organizations, users, total] = await prisma.$transaction([
       prisma.role.findMany({ orderBy: { displayName: "asc" } }),
       prisma.organization.findMany({ where: organizationScope, orderBy: { name: "asc" } }),
       prisma.user.findMany({
-        where: { isActive: true, ...userScope },
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
         select: {
           id: true,
           email: true,
@@ -210,9 +219,10 @@ router.get(
           organization: { select: { id: true, name: true } }
         },
         orderBy: [{ firstName: "asc" }, { lastName: "asc" }]
-      })
+      }),
+      prisma.user.count({ where })
     ]);
-    res.json({ data: { roles, organizations, users } });
+    res.json({ data: { roles, organizations, users, meta: { page, limit, total } } });
   })
 );
 
@@ -246,19 +256,19 @@ router.get(
           include: {
             topics: {
               orderBy: { order: "asc" },
-              include: { activities: { orderBy: { order: "asc" } } }
+              include: { activities: { orderBy: { order: "asc" }, ...(req.query.outline === "true" ? { select: { id: true, title: true, type: true, points: true, order: true, topicId: true } } : {}) } }
             }
           }
         }
       }
     });
-    if (!course) throw new HttpError(404, "Course not found");
-    const canEdit =
-      COURSE_EDITOR_ROLES.includes(req.user.role.name) &&
-      (req.user.role.name !== ROLES.INSTRUCTOR || course.instructorId === req.user.id) &&
-      (req.user.role.name !== ROLES.ORGANIZATION_ADMIN ||
-        course.organizationId === req.user.organizationId);
-    if (!canEdit) await assertCourseAccess(req.user, course.id);
+    if (!course) throw new HttpError(404, "No se encontró el curso");
+    const canEdit = hasPermission(req.user, "courses.view") && canAccessCourse(req.user, course);
+    if (!canEdit) {
+      requirePermission(req.user, "learning.view");
+      await assertCourseAccess(req.user, course.id);
+      course.accessUsers = [];
+    }
     course.blocks = course.blocks.map((block) => ({
       ...block,
       topics: block.topics.map((topic) => ({
@@ -275,16 +285,18 @@ router.post(
   allowRoles(...COURSE_EDITOR_ROLES),
   validate(courseSchema),
   asyncHandler(async (req, res) => {
+    if (req.body.status !== "DRAFT") requirePermission(req.user, "courses.publish");
     if (req.body.status === "PUBLISHED") {
-      throw new HttpError(400, "Create the course as a draft and add activities before publishing");
+      throw new HttpError(400, "Crea el curso como borrador y agrega actividades antes de publicarlo");
     }
     const instructorId =
-      req.user.role.name === ROLES.INSTRUCTOR ? req.user.id : req.body.instructorId;
+      scopeFor(req.user) === "OWN" ? req.user.id : req.body.instructorId ?? req.user.id;
     const organizationId =
-      req.user.role.name === ROLES.ORGANIZATION_ADMIN
-        ? req.user.organizationId
+      scopeFor(req.user) === "ORGANIZATION"
+        ? organizationScope(req.user)
         : req.body.organizationId;
     const audience = await resolveAudience(req.body, req.user);
+    await validateCertificateTemplate(req.body.certificateTemplateId, req.user);
     const {
       accessType: _accessType,
       accessRoleId: _accessRoleId,
@@ -300,6 +312,7 @@ router.post(
         slug: count ? `${baseSlug}-${count + 1}` : baseSlug,
         instructorId,
         organizationId,
+        certificateEnabled: Boolean(req.body.certificateTemplateId),
         accessType: audience.accessType,
         accessRoleId: audience.accessRoleId,
         accessOrganizationId: audience.accessOrganizationId,
@@ -318,17 +331,24 @@ router.patch(
   validate(idParamSchema, "params"),
   validate(courseSchema.partial()),
   asyncHandler(async (req, res) => {
-    await assertCourseEditor(req.user, req.params.id);
+    const currentCourse = await assertCourseEditor(req.user, req.params.id);
+    if (req.body.status !== undefined && req.body.status !== currentCourse.status) requirePermission(req.user, "courses.publish");
     if (req.body.status === "PUBLISHED") {
       const activityCount = await prisma.activity.count({
         where: { topic: { block: { courseId: req.params.id } } }
       });
       if (!activityCount) {
-        throw new HttpError(400, "A course must contain at least one activity before publishing");
+        throw new HttpError(400, "El curso debe tener al menos una actividad antes de publicarse");
       }
     }
-    if (req.user.role.name === ROLES.INSTRUCTOR) delete req.body.instructorId;
-    if (req.user.role.name === ROLES.ORGANIZATION_ADMIN) delete req.body.organizationId;
+    if (scopeFor(req.user) === "OWN") delete req.body.instructorId;
+    if (scopeFor(req.user) === "ORGANIZATION") delete req.body.organizationId;
+    if (req.body.certificateTemplateId !== undefined) {
+      await validateCertificateTemplate(req.body.certificateTemplateId, req.user);
+      req.body.certificateEnabled = Boolean(req.body.certificateTemplateId);
+    } else {
+      delete req.body.certificateEnabled;
+    }
     const audienceChanged = [
       "accessType",
       "accessRoleId",
@@ -392,7 +412,7 @@ router.delete(
   asyncHandler(async (req, res) => {
     await assertCourseEditor(req.user, req.params.id);
     const enrollments = await prisma.enrollment.count({ where: { courseId: req.params.id } });
-    if (enrollments) throw new HttpError(409, "Archive courses that already have enrollments");
+    if (enrollments) throw new HttpError(409, "Archiva los cursos que ya tienen inscripciones");
     await prisma.course.delete({ where: { id: req.params.id } });
     res.status(204).send();
   })

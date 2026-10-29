@@ -1,4 +1,3 @@
-import crypto from "node:crypto";
 import { HttpError } from "../lib/http-error.js";
 import { prisma } from "../lib/prisma.js";
 import { assertCourseAccess } from "./course-access.service.js";
@@ -38,7 +37,7 @@ export async function initializeEnrollment(student, courseId) {
 
   const activities = await getOrderedActivities(courseId);
   if (!activities.length) {
-    throw new HttpError(400, "This course has no activities and cannot be enrolled");
+    throw new HttpError(400, "No puedes inscribirte en este curso porque no tiene actividades");
   }
 
   return prisma.$transaction(async (tx) => {
@@ -65,9 +64,9 @@ export async function initializeEnrollment(student, courseId) {
 export async function getStudentEnrollment(studentId, courseId) {
   const enrollment = await prisma.enrollment.findUnique({
     where: { studentId_courseId: { studentId, courseId } },
-    include: { course: true, courseProgress: true }
+    include: { course: true, courseProgress: true, certificate: true }
   });
-  if (!enrollment) throw new HttpError(404, "Enrollment not found");
+  if (!enrollment) throw new HttpError(404, "No se encontró la inscripción");
   return enrollment;
 }
 
@@ -83,12 +82,12 @@ export async function requireAccessibleProgress(studentId, activityId) {
       enrollment: true
     }
   });
-  if (!progress) throw new HttpError(404, "Activity progress not found");
+  if (!progress) throw new HttpError(404, "No se encontró el progreso de la actividad");
   if (progress.status === "LOCKED") {
-    throw new HttpError(409, "Complete the previous activity first");
+    throw new HttpError(409, "Completa primero la actividad anterior");
   }
   if (progress.enrollment.status === "WITHDRAWN") {
-    throw new HttpError(409, "Enrollment is not active");
+    throw new HttpError(409, "La inscripción no está activa");
   }
   return progress;
 }
@@ -124,7 +123,7 @@ export async function completeActivity(progressId) {
       activity: { include: { topic: { include: { block: true } } } }
     }
   });
-  if (!progress) throw new HttpError(404, "Activity progress not found");
+  if (!progress) throw new HttpError(404, "No se encontró el progreso de la actividad");
 
   await prisma.$transaction(async (tx) => {
     await tx.activityProgress.update({
@@ -147,11 +146,11 @@ export async function recalculateEnrollment(enrollmentId) {
     include: {
       student: true,
       organization: true,
-      course: true,
+      course: { include: { certificateTemplate: true } },
       activityProgress: true
     }
   });
-  if (!enrollment) throw new HttpError(404, "Enrollment not found");
+  if (!enrollment) throw new HttpError(404, "No se encontró la inscripción");
 
   const total = enrollment.activityProgress.length;
   const completed = enrollment.activityProgress.filter(
@@ -202,29 +201,6 @@ export async function recalculateEnrollment(enrollmentId) {
         maxScore: 100,
         percentage: finalGrade,
         isFinal: true
-      }
-    });
-  }
-
-  if (passed && enrollment.course.certificateEnabled) {
-    const institutionName =
-      enrollment.organization?.institutionName ??
-      enrollment.organization?.name ??
-      "Government Learning Platform";
-    await prisma.certificate.upsert({
-      where: { enrollmentId },
-      update: { finalGrade, completionDate: completedAt, revokedAt: null },
-      create: {
-        enrollmentId,
-        studentId: enrollment.studentId,
-        courseId: enrollment.courseId,
-        organizationId: enrollment.organizationId,
-        certificateId: `CERT-${crypto.randomBytes(6).toString("hex").toUpperCase()}`,
-        studentName: `${enrollment.student.firstName} ${enrollment.student.lastName}`,
-        courseName: enrollment.course.title,
-        institutionName,
-        completionDate: completedAt,
-        finalGrade
       }
     });
   }
@@ -303,7 +279,7 @@ function gradeAutomaticContent(type, content, response, fallbackPoints = 1) {
     return { score, maxScore };
   }
 
-  throw new HttpError(400, "This activity is not automatically graded");
+  throw new HttpError(400, "Esta actividad no se califica automáticamente");
 }
 
 export function gradeAutomaticActivity(activity, response) {

@@ -4,16 +4,17 @@ import { verifyAccessToken } from "../lib/jwt.js";
 import { prisma } from "../lib/prisma.js";
 
 export async function requireAuth(req, _res, next) {
+  if (req.authSession && req.user) return next();
   try {
     const token = getAuthToken(req);
 
     if (!token) {
-      throw new HttpError(401, "Authentication required");
+      throw new HttpError(401, "Inicia sesión para continuar");
     }
 
     const payload = verifyAccessToken(token);
     if (typeof payload.sub !== "string" || typeof payload.jti !== "string") {
-      throw new HttpError(401, "Invalid session");
+      throw new HttpError(401, "La sesión no es válida");
     }
 
     const session = await prisma.session.findUnique({
@@ -30,7 +31,7 @@ export async function requireAuth(req, _res, next) {
       session.expiresAt <= new Date() ||
       !session.user.isActive
     ) {
-      throw new HttpError(401, "Invalid, expired, or inactive session");
+      throw new HttpError(401, "La sesión no es válida, venció o está inactiva");
     }
 
     req.user = session.user;
@@ -43,7 +44,7 @@ export async function requireAuth(req, _res, next) {
       "/api/auth/logout"
     ]);
     if (session.user.mustChangePassword && !allowedDuringPasswordChange.has(requestPath)) {
-      throw new HttpError(403, "Password change required before accessing the platform");
+      throw new HttpError(403, "Debes cambiar tu contraseña antes de acceder a la plataforma");
     }
 
     if (session.lastSeenAt.getTime() < Date.now() - 5 * 60 * 1000) {
@@ -55,7 +56,7 @@ export async function requireAuth(req, _res, next) {
 
     next();
   } catch (error) {
-    next(error instanceof HttpError ? error : new HttpError(401, "Invalid or expired session"));
+    next(error instanceof HttpError ? error : new HttpError(401, "La sesión no es válida o venció"));
   }
 }
 

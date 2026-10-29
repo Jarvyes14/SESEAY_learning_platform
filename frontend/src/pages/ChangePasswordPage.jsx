@@ -4,6 +4,7 @@ import PageHeading from "../components/PageHeading.jsx";
 import PasswordPolicyHint from "../components/PasswordPolicyHint.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { api } from "../lib/api.js";
+import { homeForUser } from "../lib/permissions.js";
 
 export default function ChangePasswordPage() {
   const { user, changePassword } = useAuth();
@@ -26,7 +27,7 @@ export default function ChangePasswordPage() {
     setSubmitting(true);
     try {
       const updated = await changePassword({ currentPassword, newPassword });
-      navigate(updated.role === "student" ? "/student" : updated.role === "instructor" ? "/instructor" : "/admin", { replace: true });
+      navigate(homeForUser(updated), { replace: true });
     } catch (requestError) {
       setError(requestError.details?.join(". ") || requestError.message);
     } finally {

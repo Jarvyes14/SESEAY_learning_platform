@@ -27,21 +27,21 @@ const limiter = rateLimit({
   limit: 15,
   standardHeaders: "draft-7",
   legacyHeaders: false,
-  message: { error: "Too many login attempts. Try again later." }
+  message: { error: "Demasiados intentos de inicio de sesión. Inténtalo más tarde." }
 });
 const recoveryLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 5,
   standardHeaders: "draft-7",
   legacyHeaders: false,
-  message: { error: "Too many recovery attempts. Try again later." }
+  message: { error: "Demasiados intentos de recuperación. Inténtalo más tarde." }
 });
 const registrationLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 10,
   standardHeaders: "draft-7",
   legacyHeaders: false,
-  message: { error: "Too many registration attempts. Try again later." }
+  message: { error: "Demasiados intentos de registro. Inténtalo más tarde." }
 });
 
 router.post(
@@ -66,10 +66,10 @@ router.post(
       });
 
       if (!authorization) {
-        throw new HttpError(403, "This email is not authorized to create an account");
+        throw new HttpError(403, "Este correo electrónico no está autorizado para crear una cuenta");
       }
       if (authorization.registeredAt) {
-        throw new HttpError(409, "An account has already been created with this email");
+        throw new HttpError(409, "Ya se creó una cuenta con este correo electrónico");
       }
 
       const existingUser = await transaction.user.findUnique({
@@ -77,7 +77,7 @@ router.post(
         select: { id: true }
       });
       if (existingUser) {
-        throw new HttpError(409, "An account with this email already exists");
+        throw new HttpError(409, "Ya existe una cuenta con este correo electrónico");
       }
 
       const createdUser = await transaction.user.create({
@@ -119,9 +119,9 @@ router.post(
       include: { role: true, organization: true }
     });
     if (!user || !(await bcrypt.compare(req.body.password, user.passwordHash))) {
-      throw new HttpError(401, "Invalid email or password");
+      throw new HttpError(401, "El correo electrónico o la contraseña son incorrectos");
     }
-    if (!user.isActive) throw new HttpError(403, "Account is inactive");
+    if (!user.isActive) throw new HttpError(403, "La cuenta está inactiva");
 
     const sessionId = randomUUID();
     const token = signAccessToken(user, sessionId);
@@ -199,7 +199,7 @@ router.post(
     }
 
     res.status(202).json({
-      message: "If an active account exists for that email, a recovery link has been sent."
+      message: "Si existe una cuenta activa con ese correo electrónico, se envió un enlace de recuperación."
     });
   })
 );
@@ -220,7 +220,7 @@ router.post(
       include: { user: true }
     });
     if (!passwordToken || !passwordToken.user.isActive) {
-      throw new HttpError(400, "Recovery link is invalid or has expired");
+      throw new HttpError(400, "El enlace de recuperación no es válido o venció");
     }
 
     const settings = await getPlatformSettings();
@@ -238,7 +238,7 @@ router.post(
       })
     ]);
 
-    res.clearCookie(env.COOKIE_NAME, authCookieOptions).json({ message: "Password updated" });
+    res.clearCookie(env.COOKIE_NAME, authCookieOptions).json({ message: "La contraseña se actualizó correctamente" });
   })
 );
 
@@ -248,12 +248,12 @@ router.post(
   validate(z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(1).max(72) })),
   asyncHandler(async (req, res) => {
     if (!(await bcrypt.compare(req.body.currentPassword, req.user.passwordHash))) {
-      throw new HttpError(400, "Current password is incorrect");
+      throw new HttpError(400, "La contraseña actual es incorrecta");
     }
     const settings = await getPlatformSettings();
     assertPasswordPolicy(req.body.newPassword, settings);
     if (await bcrypt.compare(req.body.newPassword, req.user.passwordHash)) {
-      throw new HttpError(400, "New password must be different from the current password");
+      throw new HttpError(400, "La contraseña nueva debe ser diferente de la actual");
     }
 
     const now = new Date();
@@ -349,7 +349,7 @@ router.delete(
       where: { id: req.params.id, userId: req.user.id },
       select: { id: true }
     });
-    if (!session) throw new HttpError(404, "Session not found");
+    if (!session) throw new HttpError(404, "No se encontró la sesión");
 
     await prisma.session.updateMany({
       where: { id: session.id, revokedAt: null },

@@ -14,8 +14,8 @@ export default function StatusBadge({ value }) {
     WITHDRAWN: "bg-error/10 text-error"
   };
   return (
-    <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${styles[value] ?? styles.ARCHIVED}`}>
-      {labels[value] ?? value?.replaceAll("_", " ")}
+    <span className={`inline-flex max-w-full items-center rounded-full px-2.5 py-1 text-[11px] font-bold leading-5 ${styles[value] ?? styles.ARCHIVED}`}>
+      {labels[value] ?? (value === "SUBMITTED" ? "ENVIADO" : "SIN ESTADO")}
     </span>
   );
 }

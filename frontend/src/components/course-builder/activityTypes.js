@@ -4,6 +4,7 @@ import {
   BookOpen,
   FileQuestion,
   FileText,
+  Image as ImageIcon,
   LayoutPanelTop,
   Link2,
   ListChecks,
@@ -19,8 +20,9 @@ import {
 export const CONTENT_TYPES = [
   { type: "COMPOSITE", label: "Actividad modular", description: "Combina texto, recursos y preguntas en una actividad.", group: "Contenido", icon: Blocks, selectable: false },
   { type: "READING", label: "Texto", description: "Escribe un artículo, guía o explicación.", group: "Contenido", icon: BookOpen },
+  { type: "IMAGE", label: "Imagen", description: "Agrega una captura, diagrama o recurso visual.", group: "Contenido", icon: ImageIcon },
   { type: "YOUTUBE_VIDEO", label: "Video", description: "Agrega un video de YouTube.", group: "Contenido", icon: Video },
-  { type: "EXTERNAL_LINK", label: "Enlace", description: "Dirige al estudiante a un recurso externo.", group: "Contenido", icon: Link2 },
+  { type: "EXTERNAL_LINK", label: "Enlace", description: "Dirige al participante a un recurso externo.", group: "Contenido", icon: Link2 },
   { type: "EMBEDDED_CONTENT", label: "Contenido incrustado", description: "Muestra un recurso externo dentro de la lección.", group: "Contenido", icon: PanelsTopLeft },
   { type: "INTERACTIVE_CONTENT", label: "Interactivo", description: "Crea tarjetas, pestañas o un acordeón.", group: "Contenido", icon: LayoutPanelTop },
   { type: "TRUE_FALSE", label: "Verdadero o falso", description: "Agrega una o más afirmaciones binarias.", group: "Comprobación", icon: ToggleLeft },

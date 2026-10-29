@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:wght@600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@100;300;400;500;600;700;800;900&family=Roboto:wght@100;300;400;500;600;700;800;900&family=Montserrat:wght@100;300;400;500;600;700;800;900&family=Source+Serif+4:wght@400;600;700&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -68,6 +68,44 @@
 
   body {
     @apply bg-background text-text-primary antialiased;
+    overflow-wrap: anywhere;
+    font-weight: var(--font-weight-body, 400);
+    line-height: var(--body-line-height, 1.6);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading, "Source Serif 4"), serif;
+    font-weight: var(--font-weight-heading, 700);
+  }
+
+  #root {
+    min-height: 100dvh;
+  }
+
+  body:has([aria-modal="true"]) {
+    overflow: hidden;
+  }
+
+  :where(.grid, .flex, .inline-flex) > * {
+    min-width: 0;
+  }
+
+  fieldset {
+    min-width: 0;
+  }
+
+  input,
+  select,
+  textarea {
+    max-width: 100%;
+  }
+
+  textarea {
+    resize: vertical;
+  }
+
+  svg {
+    flex-shrink: 0;
   }
 
   button,
@@ -81,26 +119,124 @@
 
 @layer components {
   .container-page {
-    @apply mx-auto w-full max-w-7xl px-6 lg:px-10;
+    @apply w-full px-4 sm:px-6 lg:px-8;
   }
 
   .panel {
-    @apply rounded-lg border border-border bg-surface shadow-panel;
+    @apply min-w-0 rounded-lg border border-border bg-surface shadow-panel;
+  }
+
+  .page-title {
+    font-size: clamp(1.5rem, 1.1rem + 1.5vw, 2.25rem);
+    line-height: 1.2;
+  }
+
+  .editable-title {
+    field-sizing: content;
+    min-height: 1.5em;
+  }
+
+  .action-group {
+    @apply flex max-w-full flex-wrap items-center gap-3;
+  }
+
+  .course-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+    @apply gap-5;
+  }
+
+  .course-card {
+    @apply flex h-full min-w-0 flex-col;
+  }
+
+  .course-card > .btn-primary:last-child,
+  .course-card > .btn-secondary:last-child {
+    @apply mt-auto;
+  }
+
+  .course-card > :nth-last-child(2) {
+    margin-bottom: 1.25rem;
+  }
+
+  .table-scroll {
+    @apply w-full min-w-0 overflow-x-auto overscroll-x-contain;
+  }
+
+  .table-scroll table {
+    min-width: 48rem;
+    overflow-wrap: normal;
+  }
+
+  .embedded-frame {
+    max-height: 80dvh;
+    min-height: 15rem;
   }
 
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-md bg-primary px-5 py-3 text-sm font-semibold text-inverse transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60;
+    @apply inline-flex min-h-11 max-w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-3 text-center text-sm font-semibold text-inverse transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60;
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-md border border-primary bg-surface px-5 py-3 text-sm font-semibold text-primary transition hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-60;
+    @apply inline-flex min-h-11 max-w-full items-center justify-center gap-2 rounded-md border border-primary bg-surface px-4 py-3 text-center text-sm font-semibold text-primary transition hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-60;
   }
 
   .input-field {
-    @apply w-full rounded-md border border-border bg-surface px-4 py-3 text-sm text-text-primary placeholder:text-text-secondary focus:border-primary;
+    @apply min-h-11 w-full min-w-0 rounded-md border border-border bg-surface px-3 py-3 text-base text-text-primary placeholder:text-text-secondary focus:border-primary sm:text-sm;
   }
 
   .eyebrow {
     @apply text-xs font-bold uppercase tracking-widest text-primary;
+  }
+
+  .brand-logo {
+    max-width: 100%;
+    padding: var(--logo-clear-space, 0px);
+  }
+
+  .brand-logo-image {
+    width: auto;
+    height: var(--logo-height-mobile, 40px);
+    max-width: min(var(--logo-max-width, 280px), 65vw);
+    object-fit: contain;
+  }
+
+  .brand-logo-desktop { display: none; }
+
+  @screen sm {
+    .brand-logo-image { height: var(--logo-height, 40px); }
+    .brand-logo-desktop { display: block; }
+    .brand-logo-mobile { display: none; }
+  }
+}
+
+@media print {
+  .brand-logo-image {
+    height: auto;
+    min-width: var(--logo-print-min, 30mm);
+  }
+}
+
+@media (max-width: 639px) {
+  .container-page.py-10 {
+    padding-top: 1.5rem;
+    padding-bottom: 1.5rem;
+  }
+
+  .panel:is(.p-6, .p-7) {
+    padding: 1rem;
+  }
+
+  .action-group {
+    width: 100%;
+  }
+
+  .action-group > * {
+    flex: 1 1 100%;
+  }
+
+  button:has(> svg:only-child) {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
   }
 }

@@ -1,9 +1,11 @@
+import { publicCertificate } from "../utils/certificates.js";
+import { enrollmentScope, canAccessEnrollment, canAccessUser, scopeFor, requirePermission } from "../lib/permissions.js";
+import { assertCourseEditor } from "../services/course-access.service.js";
 import { Router } from "express";
 import { z } from "zod";
 import { asyncHandler } from "../lib/async-handler.js";
 import { HttpError } from "../lib/http-error.js";
 import { prisma } from "../lib/prisma.js";
-import { ADMIN_ROLES, ROLES } from "../lib/roles.js";
 import { requireAuth } from "../middleware/auth.js";
 import { validate } from "../middleware/validate.js";
 import { getOrderedActivities, initializeEnrollment } from "../services/learning.service.js";
@@ -15,17 +17,9 @@ router.use(requireAuth);
 router.get(
   "/",
   asyncHandler(async (req, res) => {
-    const where = req.query.mine === "true"
-      ? { studentId: req.user.id }
-      : req.user.role.name === ROLES.STUDENT
-        ? { studentId: req.user.id }
-        : req.user.role.name === ROLES.INSTRUCTOR
-          ? { course: { instructorId: req.user.id } }
-          : req.user.role.name === ROLES.ORGANIZATION_ADMIN
-            ? { organizationId: req.user.organizationId }
-            : {};
+    const where = req.query.mine === "true" ? { studentId: req.user.id } : enrollmentScope(req.user);
     res.json({
-      data: await prisma.enrollment.findMany({
+      data: (await prisma.enrollment.findMany({
         where,
         include: {
           student: { select: { id: true, firstName: true, lastName: true, email: true } },
@@ -34,7 +28,7 @@ router.get(
           certificate: true
         },
         orderBy: { updatedAt: "desc" }
-      })
+      })).map(enrollment => ({ ...enrollment, certificate: publicCertificate(enrollment.certificate) }))
     });
   })
 );
@@ -49,24 +43,15 @@ router.post(
   ),
   asyncHandler(async (req, res) => {
     const studentId = req.body.studentId ?? req.user.id;
-    if (
-      studentId !== req.user.id &&
-      !ADMIN_ROLES.includes(req.user.role.name) &&
-      req.user.role.name !== ROLES.INSTRUCTOR
-    ) {
-      throw new HttpError(403, "Not authorized");
-    }
     const student = await prisma.user.findUnique({
       where: { id: studentId },
       include: { role: true }
     });
-    if (!student?.isActive) throw new HttpError(400, "An active user account is required");
-    if (
-      studentId !== req.user.id &&
-      req.user.role.name === ROLES.ORGANIZATION_ADMIN &&
-      student.organizationId !== req.user.organizationId
-    ) {
-      throw new HttpError(403, "The user is outside your organization");
+    if (!student?.isActive) throw new HttpError(400, "Se requiere una cuenta de usuario activa");
+    if (studentId !== req.user.id) {
+      requirePermission(req.user, "enrollments.manage");
+      await assertCourseEditor(req.user, req.body.courseId);
+      if (scopeFor(req.user) === "ORGANIZATION" && !canAccessUser(req.user, student)) throw new HttpError(403, "La cuenta esta fuera de tu organización");
     }
     const enrollment = await initializeEnrollment(student, req.body.courseId);
     res.status(201).json({ data: enrollment });
@@ -81,21 +66,11 @@ router.post(
       where: { id: req.params.id },
       include: { course: true }
     });
-    if (!enrollment) throw new HttpError(404, "Enrollment not found");
+    if (!enrollment) throw new HttpError(404, "No se encontró la inscripción");
 
-    const canReset =
-      ADMIN_ROLES.includes(req.user.role.name) ||
-      (req.user.role.name === ROLES.INSTRUCTOR && enrollment.course.instructorId === req.user.id);
-    if (!canReset) throw new HttpError(403, "Not authorized to reset this progress");
-    if (
-      req.user.role.name === ROLES.ORGANIZATION_ADMIN &&
-      enrollment.organizationId !== req.user.organizationId
-    ) {
-      throw new HttpError(403, "The enrollment is outside your organization");
-    }
-
+    if (!canAccessEnrollment(req.user, enrollment)) throw new HttpError(403, "La inscripcion esta fuera de tu alcance");
     const activities = await getOrderedActivities(enrollment.courseId);
-    if (!activities.length) throw new HttpError(409, "This course has no activities");
+    if (!activities.length) throw new HttpError(409, "Este curso no tiene actividades");
 
     await prisma.$transaction(async (tx) => {
       await tx.certificate.deleteMany({ where: { enrollmentId: enrollment.id } });
@@ -135,13 +110,11 @@ router.delete(
   "/:id",
   validate(idParamSchema, "params"),
   asyncHandler(async (req, res) => {
-    const enrollment = await prisma.enrollment.findUnique({ where: { id: req.params.id } });
-    if (!enrollment) throw new HttpError(404, "Enrollment not found");
-    if (
-      req.user.role.name === ROLES.STUDENT &&
-      enrollment.studentId !== req.user.id
-    ) {
-      throw new HttpError(403, "Not authorized");
+    const enrollment = await prisma.enrollment.findUnique({ where: { id: req.params.id }, include: { course: true } });
+    if (enrollment.studentId === req.user.id) requirePermission(req.user, "learning.enroll");
+    else {
+      requirePermission(req.user, "enrollments.manage");
+      if (!canAccessEnrollment(req.user, enrollment)) throw new HttpError(403, "La inscripcion esta fuera de tu alcance");
     }
     await prisma.enrollment.update({
       where: { id: enrollment.id },

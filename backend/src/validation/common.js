@@ -15,5 +15,5 @@ export const slugSchema = z
   .trim()
   .min(3)
   .max(100)
-  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Use lowercase letters, numbers, and hyphens");
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Usa letras minúsculas, números y guiones");
 

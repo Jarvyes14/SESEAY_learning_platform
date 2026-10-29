@@ -13,9 +13,9 @@ describe("Política de contraseñas", () => {
   it("rechaza una contraseña e informa todas las reglas incumplidas", () => {
     expect(passwordPolicyErrors("corta", defaultPlatformSettings)).toEqual(expect.arrayContaining([
       expect.stringContaining("12"),
-      expect.stringContaining("uppercase"),
-      expect.stringContaining("number"),
-      expect.stringContaining("special")
+      expect.stringContaining("mayúscula"),
+      expect.stringContaining("número"),
+      expect.stringContaining("especial")
     ]));
   });
 });

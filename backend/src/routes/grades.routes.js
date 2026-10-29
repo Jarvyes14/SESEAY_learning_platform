@@ -1,9 +1,10 @@
+import { enrollmentScope } from "../lib/permissions.js";
 import { Router } from "express";
 import { z } from "zod";
 import { asyncHandler } from "../lib/async-handler.js";
 import { HttpError } from "../lib/http-error.js";
 import { prisma } from "../lib/prisma.js";
-import { COURSE_EDITOR_ROLES, ROLES } from "../lib/roles.js";
+import { COURSE_EDITOR_ROLES } from "../lib/roles.js";
 import { requireAuth } from "../middleware/auth.js";
 import { allowRoles } from "../middleware/roles.js";
 import { validate } from "../middleware/validate.js";
@@ -20,14 +21,7 @@ router.use(requireAuth);
 router.get(
   "/",
   asyncHandler(async (req, res) => {
-    const where =
-      req.user.role.name === ROLES.STUDENT
-        ? { studentId: req.user.id }
-        : req.user.role.name === ROLES.INSTRUCTOR
-          ? { course: { instructorId: req.user.id } }
-          : req.user.role.name === ROLES.ORGANIZATION_ADMIN
-            ? { enrollment: { organizationId: req.user.organizationId } }
-            : {};
+    const where = { enrollment: enrollmentScope(req.user) };
     res.json({
       data: await prisma.grade.findMany({
         where,
@@ -43,14 +37,37 @@ router.get(
 );
 
 router.get(
+  "/overview",
+  asyncHandler(async (req, res) => {
+    const where = enrollmentScope(req.user);
+
+    const data = await prisma.enrollment.findMany({
+      where,
+      include: {
+        student: { select: { id: true, firstName: true, lastName: true, email: true } },
+        course: { select: { id: true, title: true, passingGrade: true } },
+        courseProgress: {
+          select: { completionPercent: true, finalGrade: true, passed: true, completedAt: true }
+        },
+        grades: {
+          include: { activity: { select: { id: true, title: true, type: true } } },
+          orderBy: { createdAt: "desc" }
+        }
+      },
+      orderBy: { enrolledAt: "desc" }
+    });
+
+    res.json({ data });
+  })
+);
+
+router.get(
   "/pending",
   allowRoles(...COURSE_EDITOR_ROLES),
   asyncHandler(async (req, res) => {
     const where = {
       status: "PENDING_REVIEW",
-      ...(req.user.role.name === ROLES.INSTRUCTOR
-        ? { activity: { topic: { block: { course: { instructorId: req.user.id } } } } }
-        : {})
+      enrollment: enrollmentScope(req.user)
     };
     res.json({
       data: await prisma.activityAttempt.findMany({
@@ -84,14 +101,14 @@ router.patch(
         activity: { include: { topic: { include: { block: true } } } }
       }
     });
-    if (!attempt) throw new HttpError(404, "Attempt not found");
+    if (!attempt) throw new HttpError(404, "No se encontró el intento");
     if (attempt.status !== "PENDING_REVIEW") {
-      throw new HttpError(409, "Attempt is not pending review");
+      throw new HttpError(409, "El intento no está pendiente de revisión");
     }
     await assertCourseEditor(req.user, attempt.activity.topic.block.courseId);
     const maxScore = attempt.activity.points || 100;
     if (req.body.score > maxScore) {
-      throw new HttpError(400, `Score cannot exceed ${maxScore}`);
+      throw new HttpError(400, `La calificación no puede superar ${maxScore}`);
     }
     const updated = await prisma.activityAttempt.update({
       where: { id: attempt.id },

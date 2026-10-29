@@ -35,9 +35,9 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <main className="min-h-screen bg-background p-8">
+    <main className="min-h-dvh bg-background px-4 py-6 sm:p-8">
       <Logo />
-      <form className="panel mx-auto mt-20 max-w-md p-7" onSubmit={submit}>
+      <form className="panel mx-auto mt-8 max-w-md p-5 sm:mt-16 sm:p-7" onSubmit={submit}>
         <h1 className="font-display text-3xl font-bold">Crea una nueva contraseña</h1>
         <p className="mt-2 text-sm text-text-secondary">Este enlace sólo puede utilizarse una vez.</p>
         <label className="mt-6 block"><span className="mb-2 block text-sm font-semibold">Nueva contraseña</span><input className="input-field" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required autoComplete="new-password" /></label>

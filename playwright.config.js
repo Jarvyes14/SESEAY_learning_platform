@@ -7,7 +7,7 @@ export default defineConfig({
   timeout: 30_000,
   expect: { timeout: 7_000 },
   retries: 0,
-  outputDir: "playwright-artifacts",
+  outputDir: "playwright-artifacts/e2e",
   reporter: [["list"], ["html", { outputFolder: "playwright-report", open: "never" }]],
   use: {
     baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000",

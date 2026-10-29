@@ -29,6 +29,7 @@ const activityTypes = [
   "FINAL_EXAM"
 ];
 const compositeModuleTypes = [
+  "IMAGE",
   "YOUTUBE_VIDEO",
   "READING",
   "EXTERNAL_LINK",
@@ -55,6 +56,11 @@ const input = z.object({
 });
 
 const contentSchemas = {
+    IMAGE: z.object({
+      url: z.string().min(1).max(500),
+      alt: z.string().trim().min(2).max(200),
+      caption: z.string().trim().max(500).optional().default("")
+    }),
     YOUTUBE_VIDEO: z.object({
       url: z.string().url(),
       durationSeconds: z.number().positive()
@@ -161,15 +167,15 @@ function validateContent(type, content) {
       })).min(1).max(100)
     }).safeParse(content);
     if (!compositeResult.success) {
-      throw new HttpError(400, "Invalid modular activity content", compositeResult.error.flatten());
+      throw new HttpError(400, "El contenido de la actividad modular no es válido", compositeResult.error.flatten());
     }
     const seenIds = new Set();
     const modules = compositeResult.data.modules.map((module) => {
-      if (seenIds.has(module.id)) throw new HttpError(400, "Every content block must have a unique id");
+      if (seenIds.has(module.id)) throw new HttpError(400, "Cada bloque de contenido debe tener un identificador único");
       seenIds.add(module.id);
       const moduleResult = contentSchemas[module.type].safeParse(module.content);
       if (!moduleResult.success) {
-        throw new HttpError(400, `Invalid ${module.type} block content`, moduleResult.error.flatten());
+        throw new HttpError(400, "El contenido de uno de los bloques no es válido", moduleResult.error.flatten());
       }
       return { ...module, content: moduleResult.data };
     });
@@ -177,7 +183,7 @@ function validateContent(type, content) {
   }
 
   const result = contentSchemas[type].safeParse(content);
-  if (!result.success) throw new HttpError(400, "Invalid activity content", result.error.flatten());
+  if (!result.success) throw new HttpError(400, "El contenido de la actividad no es válido", result.error.flatten());
   return result.data;
 }
 
@@ -186,7 +192,7 @@ async function getTopicCourse(topicId) {
     where: { id: topicId },
     include: { block: true }
   });
-  if (!topic) throw new HttpError(404, "Topic not found");
+  if (!topic) throw new HttpError(404, "No se encontró la lección");
   return topic;
 }
 
@@ -215,7 +221,7 @@ router.get(
       where: { id: req.params.id },
       include: { topic: { include: { block: true } } }
     });
-    if (!activity) throw new HttpError(404, "Activity not found");
+    if (!activity) throw new HttpError(404, "No se encontró la actividad");
     await assertCourseEditor(req.user, activity.topic.block.courseId);
     res.json({ data: activity });
   })
@@ -228,7 +234,7 @@ router.post(
     const topic = await getTopicCourse(req.body.topicId);
     await assertCourseEditor(req.user, topic.block.courseId);
     const enrollments = await prisma.enrollment.count({ where: { courseId: topic.block.courseId } });
-    if (enrollments) throw new HttpError(409, "Course structure cannot change after enrollment");
+    if (enrollments) throw new HttpError(409, "No se puede cambiar la estructura de un curso que ya tiene inscripciones");
     const content = validateContent(req.body.type, req.body.content);
     const order = (await prisma.activity.count({ where: { topicId: topic.id } })) + 1;
     res.status(201).json({
@@ -246,7 +252,7 @@ router.patch(
       where: { id: req.params.id },
       include: { topic: { include: { block: true } } }
     });
-    if (!activity) throw new HttpError(404, "Activity not found");
+    if (!activity) throw new HttpError(404, "No se encontró la actividad");
     await assertCourseEditor(req.user, activity.topic.block.courseId);
     const type = req.body.type ?? activity.type;
     const content = req.body.content
@@ -269,12 +275,12 @@ router.delete(
       where: { id: req.params.id },
       include: { topic: { include: { block: true } } }
     });
-    if (!activity) throw new HttpError(404, "Activity not found");
+    if (!activity) throw new HttpError(404, "No se encontró la actividad");
     await assertCourseEditor(req.user, activity.topic.block.courseId);
     const enrollments = await prisma.enrollment.count({
       where: { courseId: activity.topic.block.courseId }
     });
-    if (enrollments) throw new HttpError(409, "Course structure cannot change after enrollment");
+    if (enrollments) throw new HttpError(409, "No se puede cambiar la estructura de un curso que ya tiene inscripciones");
     await prisma.activity.delete({ where: { id: activity.id } });
     res.status(204).send();
   })

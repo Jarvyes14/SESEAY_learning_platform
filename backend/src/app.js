@@ -1,3 +1,4 @@
+import "./lib/validation-i18n.js";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
@@ -18,7 +19,7 @@ app.use(
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
   })
 );
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json({ limit: "8mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(morgan(env.NODE_ENV === "production" ? "combined" : "dev"));
@@ -30,4 +31,3 @@ app.get("/health", (_req, res) => {
 app.use("/api", apiRouter);
 app.use(notFound);
 app.use(errorHandler);
-

@@ -6,7 +6,7 @@ export const validate =
     const result = schema.safeParse(req[source]);
 
     if (!result.success) {
-      return next(new HttpError(400, "Validation failed", result.error.flatten()));
+      return next(new HttpError(400, "Revisa los datos ingresados", result.error.flatten()));
     }
 
     if (source === "query") {

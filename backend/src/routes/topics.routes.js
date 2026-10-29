@@ -26,7 +26,7 @@ router.get(
     const block = await prisma.courseBlock.findUnique({
       where: { id: req.validatedQuery.blockId }
     });
-    if (!block) throw new HttpError(404, "Block not found");
+    if (!block) throw new HttpError(404, "No se encontró el bloque");
     await assertCourseEditor(req.user, block.courseId);
     res.json({
       data: await prisma.topic.findMany({
@@ -46,7 +46,7 @@ router.get(
       where: { id: req.params.id },
       include: { block: true, activities: { orderBy: { order: "asc" } } }
     });
-    if (!topic) throw new HttpError(404, "Topic not found");
+    if (!topic) throw new HttpError(404, "No se encontró la lección");
     await assertCourseEditor(req.user, topic.block.courseId);
     res.json({ data: topic });
   })
@@ -57,10 +57,10 @@ router.post(
   validate(input),
   asyncHandler(async (req, res) => {
     const block = await prisma.courseBlock.findUnique({ where: { id: req.body.blockId } });
-    if (!block) throw new HttpError(404, "Block not found");
+    if (!block) throw new HttpError(404, "No se encontró el bloque");
     await assertCourseEditor(req.user, block.courseId);
     const enrollments = await prisma.enrollment.count({ where: { courseId: block.courseId } });
-    if (enrollments) throw new HttpError(409, "Course structure cannot change after enrollment");
+    if (enrollments) throw new HttpError(409, "No se puede cambiar la estructura de un curso que ya tiene inscripciones");
     const order = (await prisma.topic.count({ where: { blockId: block.id } })) + 1;
     res.status(201).json({
       data: await prisma.topic.create({ data: { ...req.body, order } })
@@ -77,7 +77,7 @@ router.patch(
       where: { id: req.params.id },
       include: { block: true }
     });
-    if (!topic) throw new HttpError(404, "Topic not found");
+    if (!topic) throw new HttpError(404, "No se encontró la lección");
     await assertCourseEditor(req.user, topic.block.courseId);
     res.json({ data: await prisma.topic.update({ where: { id: topic.id }, data: req.body }) });
   })
@@ -91,10 +91,10 @@ router.delete(
       where: { id: req.params.id },
       include: { block: true }
     });
-    if (!topic) throw new HttpError(404, "Topic not found");
+    if (!topic) throw new HttpError(404, "No se encontró la lección");
     await assertCourseEditor(req.user, topic.block.courseId);
     const enrollments = await prisma.enrollment.count({ where: { courseId: topic.block.courseId } });
-    if (enrollments) throw new HttpError(409, "Course structure cannot change after enrollment");
+    if (enrollments) throw new HttpError(409, "No se puede cambiar la estructura de un curso que ya tiene inscripciones");
     await prisma.topic.delete({ where: { id: topic.id } });
     res.status(204).send();
   })

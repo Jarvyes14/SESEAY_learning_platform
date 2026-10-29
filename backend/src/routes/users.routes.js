@@ -1,3 +1,4 @@
+import { canDelegateRole, canAccessUser, isRoot, scopeFor, userScope, requirePermission, hasPermission } from "../lib/permissions.js";
 import bcrypt from "bcrypt";
 import { Router } from "express";
 import { z } from "zod";
@@ -16,33 +17,29 @@ import {
 } from "../services/platform-settings.service.js";
 
 const router = Router();
-const roleNames = Object.values(ROLES);
 
-function manageableRolesFor(user) {
-  if (user.role.name === ROLES.PLATFORM_ADMIN) return roleNames;
-  if (user.role.name === ROLES.GOVERNMENT_ADMIN) {
-    return roleNames.filter((role) => role !== ROLES.PLATFORM_ADMIN);
-  }
-  return [ROLES.INSTRUCTOR, ROLES.STUDENT];
+
+async function assignableRole(user, name) {
+  const role = await prisma.role.findUnique({ where: { name } });
+  if (!role) throw new HttpError(400, "El rol seleccionado no existe");
+  if (!canDelegateRole(user, role)) throw new HttpError(403, "No puedes asignar un rol con privilegios superiores a los tuyos");
+  return role;
 }
-
+function assertTarget(user, target) {
+  if (!canAccessUser(user, target)) throw new HttpError(403, "La cuenta esta fuera de tu alcance de acceso");
+  if (!isRoot(user) && !canDelegateRole(user, target.role)) throw new HttpError(403, "No puedes gestionar una cuenta con privilegios superiores a los tuyos");
+}
 router.use(requireAuth);
-router.use((req, _res, next) => {
-  if (req.user.role.name === ROLES.ORGANIZATION_ADMIN && !req.user.organizationId) {
-    return next(new HttpError(403, "Your account is not assigned to an organization"));
-  }
-  next();
-});
 
 router.get(
   "/roles",
   allowRoles(...ADMIN_ROLES),
   asyncHandler(async (req, res) => {
     res.json({
-      data: await prisma.role.findMany({
-        where: { name: { in: manageableRolesFor(req.user) } },
+      data: (await prisma.role.findMany({
+        
         orderBy: { displayName: "asc" }
-      })
+      })).filter(role => canDelegateRole(req.user, role))
     });
   })
 );
@@ -53,9 +50,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const data = await prisma.authorizedEmail.findMany({
       where:
-        req.user.role.name === ROLES.ORGANIZATION_ADMIN
-          ? { organizationId: req.user.organizationId }
-          : {},
+        scopeFor(req.user) === "GLOBAL" ? {} : scopeFor(req.user) === "ORGANIZATION" ? { organizationId: userScope(req.user).organizationId } : { email: req.user.email },
       include: { role: true, organization: true },
       orderBy: { createdAt: "desc" }
     });
@@ -64,6 +59,7 @@ router.get(
         id: entry.id,
         email: entry.email,
         role: entry.role.name,
+        roleDisplayName: entry.role.displayName,
         organization: entry.organization,
         registeredAt: entry.registeredAt,
         createdAt: entry.createdAt
@@ -78,21 +74,15 @@ router.post(
   validate(
     z.object({
       email: z.string().trim().email().transform((value) => value.toLowerCase()),
-      role: z.enum(roleNames),
+      role: z.string().min(1).max(100),
       organizationId: z.string().uuid().nullable().optional()
     })
   ),
   asyncHandler(async (req, res) => {
-    if (!manageableRolesFor(req.user).includes(req.body.role)) {
-      throw new HttpError(403, "You cannot authorize this role");
-    }
-    if (req.user.role.name === ROLES.ORGANIZATION_ADMIN) {
-      req.body.organizationId = req.user.organizationId;
-    }
-    if (req.body.role === ROLES.ORGANIZATION_ADMIN && !req.body.organizationId) {
-      throw new HttpError(400, "Organization administrators must belong to an organization");
-    }
-
+    if (scopeFor(req.user) === "OWN" && req.body.email !== req.user.email) throw new HttpError(403, "El alcance propio no permite autorizar otras cuentas");
+    const selectedRole = await assignableRole(req.user, req.body.role);
+    if (scopeFor(req.user) !== "GLOBAL") req.body.organizationId = req.user.organizationId;
+    if (selectedRole.scope === "ORGANIZATION" && !req.body.organizationId) throw new HttpError(400, "Este rol requiere una organización");
     const [role, existingUser, organization] = await Promise.all([
       prisma.role.findUnique({ where: { name: req.body.role } }),
       prisma.user.findUnique({ where: { email: req.body.email }, select: { id: true } }),
@@ -100,10 +90,10 @@ router.post(
         ? prisma.organization.findUnique({ where: { id: req.body.organizationId }, select: { id: true } })
         : null
     ]);
-    if (!role) throw new HttpError(500, "The selected role is not configured");
-    if (existingUser) throw new HttpError(409, "An account with this email already exists");
+    if (!role) throw new HttpError(500, "El rol seleccionado no está configurado");
+    if (existingUser) throw new HttpError(409, "Ya existe una cuenta con este correo electrónico");
     if (req.body.organizationId && !organization) {
-      throw new HttpError(400, "The selected organization does not exist");
+      throw new HttpError(400, "La organización seleccionada no existe");
     }
 
     const entry = await prisma.authorizedEmail.create({
@@ -119,6 +109,7 @@ router.post(
         id: entry.id,
         email: entry.email,
         role: entry.role.name,
+        roleDisplayName: entry.role.displayName,
         organization: entry.organization,
         registeredAt: entry.registeredAt,
         createdAt: entry.createdAt
@@ -133,13 +124,10 @@ router.delete(
   validate(idParamSchema, "params"),
   asyncHandler(async (req, res) => {
     const entry = await prisma.authorizedEmail.findUnique({ where: { id: req.params.id } });
-    if (!entry) throw new HttpError(404, "Authorized email not found");
-    if (
-      req.user.role.name === ROLES.ORGANIZATION_ADMIN &&
-      entry.organizationId !== req.user.organizationId
-    ) {
-      throw new HttpError(403, "This email is outside your organization");
-    }
+    if (!entry) throw new HttpError(404, "No se encontró el correo autorizado");
+    if (scopeFor(req.user) !== "GLOBAL" && (scopeFor(req.user) === "OWN" ? entry.email !== req.user.email : entry.organizationId !== userScope(req.user).organizationId)) throw new HttpError(403, "El correo esta fuera de tu alcance");
+    const entryRole = await prisma.role.findUnique({ where: { id: entry.roleId } });
+    if (!canDelegateRole(req.user, entryRole)) throw new HttpError(403, "No puedes gestionar esta autorizacion");
     await prisma.authorizedEmail.delete({ where: { id: entry.id } });
     res.status(204).send();
   })
@@ -148,13 +136,11 @@ router.delete(
 router.get(
   "/",
   allowRoles(...ADMIN_ROLES),
-  validate(paginationSchema.extend({ role: z.enum(roleNames).optional() }), "query"),
+  validate(paginationSchema.extend({ role: z.string().min(1).max(100).optional() }), "query"),
   asyncHandler(async (req, res) => {
     const { page, limit, search, role } = req.validatedQuery;
     const where = {
-      ...(req.user.role.name === ROLES.ORGANIZATION_ADMIN
-        ? { organizationId: req.user.organizationId }
-        : {}),
+      ...userScope(req.user),
       ...(role ? { role: { name: role } } : {}),
       ...(search
         ? {
@@ -190,7 +176,7 @@ router.get(
       }),
       prisma.user.count({ where })
     ]);
-    res.json({ data: users.map(publicUser), meta: { page, limit, total } });
+    res.json({ data: users.map(user => publicUser(hasPermission(req.user, "users.sessions.view") ? user : { ...user, sessions: undefined })), meta: { page, limit, total } });
   })
 );
 
@@ -203,13 +189,8 @@ router.get(
       where: { id: req.params.id },
       include: { role: true, organization: true }
     });
-    if (!user) throw new HttpError(404, "User not found");
-    if (
-      req.user.role.name === ROLES.ORGANIZATION_ADMIN &&
-      user.organizationId !== req.user.organizationId
-    ) {
-      throw new HttpError(403, "User is outside your organization");
-    }
+    if (!user) throw new HttpError(404, "No se encontró la persona usuaria");
+    if (!canAccessUser(req.user, user)) throw new HttpError(403, "La cuenta esta fuera de tu alcance");
     res.json({ data: publicUser(user) });
   })
 );
@@ -224,7 +205,7 @@ router.patch(
       firstName: z.string().trim().min(2).max(80).optional(),
       lastName: z.string().trim().min(2).max(80).optional(),
       isActive: z.boolean().optional(),
-      role: z.enum(roleNames).optional(),
+      role: z.string().min(1).max(100).optional(),
       organizationId: z.string().uuid().nullable().optional(),
       password: z.string().min(8).max(72).optional()
     })
@@ -234,75 +215,42 @@ router.patch(
       where: { id: req.params.id },
       include: { role: true }
     });
-    if (!target) throw new HttpError(404, "User not found");
-    if (
-      req.user.role.name === ROLES.ORGANIZATION_ADMIN &&
-      target.organizationId !== req.user.organizationId
-    ) {
-      throw new HttpError(403, "User is outside your organization");
-    }
-
-    if (
-      req.user.role.name !== ROLES.PLATFORM_ADMIN &&
-      target.role.name === ROLES.PLATFORM_ADMIN
-    ) {
-      throw new HttpError(403, "Only a platform administrator can manage this account");
-    }
-    if (
-      req.user.role.name === ROLES.ORGANIZATION_ADMIN &&
-      target.id !== req.user.id &&
-      !manageableRolesFor(req.user).includes(target.role.name)
-    ) {
-      throw new HttpError(403, "You cannot manage a user with this role");
-    }
-    if (target.id === req.user.id) {
-      if (req.body.isActive === false) {
-        throw new HttpError(400, "You cannot deactivate your own account");
-      }
-      if (req.body.role && req.body.role !== target.role.name) {
-        throw new HttpError(400, "You cannot change your own role");
-      }
-      if (
-        req.body.organizationId !== undefined &&
-        req.body.organizationId !== target.organizationId
-      ) {
-        throw new HttpError(400, "You cannot change your own organization");
-      }
-    }
-    if (req.body.role && !manageableRolesFor(req.user).includes(req.body.role)) {
-      throw new HttpError(403, "You cannot assign this role");
-    }
-    if (req.user.role.name === ROLES.ORGANIZATION_ADMIN) {
-      req.body.organizationId = req.user.organizationId;
-    }
+    if (!target) throw new HttpError(404, "No se encontró la persona usuaria");
+    assertTarget(req.user, target);
+    for (const field of ["email", "firstName", "lastName"]) if (req.body[field] !== undefined && req.body[field] !== target[field]) requirePermission(req.user, "users.edit");
+    if (req.body.isActive !== undefined && req.body.isActive !== target.isActive) requirePermission(req.user, "users.status");
+    if (req.body.password) requirePermission(req.user, "users.reset_password");
+    if ((req.body.role !== undefined && req.body.role !== target.role.name) || (req.body.organizationId !== undefined && req.body.organizationId !== target.organizationId)) requirePermission(req.user, "users.assign_roles");
+    if (target.id === req.user.id && (req.body.isActive === false || (req.body.role && req.body.role !== target.role.name) || (req.body.organizationId !== undefined && req.body.organizationId !== target.organizationId))) throw new HttpError(400, "No puedes desactivar tu cuenta ni cambiar tu propio rol u organización");
+    if (scopeFor(req.user) !== "GLOBAL" && req.body.organizationId !== undefined && req.body.organizationId !== target.organizationId) throw new HttpError(403, "No puedes cambiar cuentas fuera de tu organización");
+    if (req.body.role && req.body.role !== target.role.name) await assignableRole(req.user, req.body.role);
 
     if (req.body.email && req.body.email !== target.email) {
       const existingUser = await prisma.user.findUnique({
         where: { email: req.body.email },
         select: { id: true }
       });
-      if (existingUser) throw new HttpError(409, "An account with this email already exists");
+      if (existingUser) throw new HttpError(409, "Ya existe una cuenta con este correo electrónico");
     }
 
     const role = req.body.role
       ? await prisma.role.findUnique({ where: { name: req.body.role } })
       : null;
     if (req.body.role && !role) {
-      throw new HttpError(500, "The selected role is not configured");
+      throw new HttpError(500, "El rol seleccionado no está configurado");
     }
 
-    const finalRole = req.body.role ?? target.role.name;
     const finalOrganizationId =
       req.body.organizationId === undefined ? target.organizationId : req.body.organizationId;
-    if (finalRole === ROLES.ORGANIZATION_ADMIN && !finalOrganizationId) {
-      throw new HttpError(400, "Organization administrators must belong to an organization");
+    if ((role ?? target.role).scope === "ORGANIZATION" && !finalOrganizationId) {
+      throw new HttpError(400, "Las personas administradoras de organización deben pertenecer a una organización");
     }
     if (finalOrganizationId) {
       const organization = await prisma.organization.findUnique({
         where: { id: finalOrganizationId },
         select: { id: true }
       });
-      if (!organization) throw new HttpError(400, "The selected organization does not exist");
+      if (!organization) throw new HttpError(400, "La organización seleccionada no existe");
     }
 
     const settings = req.body.password ? await getPlatformSettings() : null;
@@ -350,7 +298,10 @@ router.delete(
   allowRoles(ROLES.PLATFORM_ADMIN),
   validate(idParamSchema, "params"),
   asyncHandler(async (req, res) => {
-    if (req.user.id === req.params.id) throw new HttpError(400, "You cannot delete your own account");
+    if (req.user.id === req.params.id) throw new HttpError(400, "No puedes eliminar tu propia cuenta");
+    const target = await prisma.user.findUnique({ where: { id: req.params.id }, include: { role: true } });
+    if (!target) throw new HttpError(404, "No se encontró la persona usuaria");
+    assertTarget(req.user, target);
     await prisma.user.delete({ where: { id: req.params.id } });
     res.status(204).send();
   })
